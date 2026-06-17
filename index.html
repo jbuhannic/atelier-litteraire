@@ -1,0 +1,2132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier Littéraire</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ══════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════ */
+:root {
+  --noir:#0f0e0c; --encre:#1c1a16; --brun:#3a2e20;
+  --sepia:#8b6f47; --or:#c9962a; --or-pale:#e8c96a;
+  --parchemin:#f5f0e8; --creme:#ede7da; --blanc:#faf8f4;
+  --marge:#7a6e5e; --bord:#d4c9b8;
+  --vert:#4a7c5a; --bleu:#3a5a8a; --rouge:#8a3a2a; --violet:#6a3a8a;
+  --r:3px; --sh:0 2px 12px rgba(0,0,0,.07);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--parchemin);color:var(--encre);font-size:15px;line-height:1.6}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--creme)}::-webkit-scrollbar-thumb{background:var(--sepia);border-radius:3px}
+
+/* ══════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════ */
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:240px;min-width:240px;background:var(--noir);display:flex;flex-direction:column;overflow:hidden;transition:width .3s;position:relative;z-index:10}
+#sidebar.collapsed{width:0;min-width:0}
+.sb-brand{padding:1.4rem 1.2rem 1rem;border-bottom:1px solid rgba(255,255,255,.07)}
+.sb-logo{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--blanc);line-height:1.2}
+.sb-logo em{color:var(--or);font-style:italic}
+.sb-sub{font-size:.65rem;color:#4a4030;letter-spacing:.12em;text-transform:uppercase;margin-top:.2rem}
+.sb-section{padding:.8rem .8rem .3rem;font-size:.63rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#3a3020}
+.sb-item{display:flex;align-items:center;gap:.6rem;padding:.55rem 1.2rem;color:#8a7a68;font-size:.84rem;cursor:pointer;transition:all .15s;border-left:2px solid transparent;white-space:nowrap;overflow:hidden}
+.sb-item:hover{background:rgba(255,255,255,.04);color:var(--creme)}
+.sb-item.active{color:var(--or);border-left-color:var(--or);background:rgba(201,150,42,.06)}
+.sb-item .ico{font-size:.9rem;flex-shrink:0}
+.sb-spacer{flex:1}
+.sb-user{padding:.8rem 1.2rem;border-top:1px solid rgba(255,255,255,.07);font-size:.8rem;color:#5a4a38;display:flex;align-items:center;gap:.5rem}
+.sb-avatar{width:28px;height:28px;border-radius:50%;background:var(--brun);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--or);font-weight:700;flex-shrink:0}
+.sb-name{color:var(--creme);font-size:.82rem}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{height:52px;background:var(--blanc);border-bottom:1px solid var(--bord);display:flex;align-items:center;padding:0 1.5rem;gap:1rem;flex-shrink:0}
+#menu-toggle{background:none;border:none;cursor:pointer;padding:.3rem;color:var(--marge);font-size:1.1rem}
+#topbar-title{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;color:var(--encre);flex:1}
+#content{flex:1;overflow-y:auto;padding:2rem}
+
+/* ══════════════════════════════════════════
+   PANELS
+══════════════════════════════════════════ */
+.panel{display:none}.panel.active{display:block}
+
+/* ══════════════════════════════════════════
+   CARDS / FORMS / BUTTONS
+══════════════════════════════════════════ */
+.card{background:var(--blanc);border:1px solid var(--bord);border-radius:var(--r);padding:1.8rem;margin-bottom:1.4rem;box-shadow:var(--sh)}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;font-weight:600;color:var(--encre);margin-bottom:1.2rem;padding-bottom:.8rem;border-bottom:1px solid var(--creme);display:flex;align-items:center;gap:.5rem}
+.ct-icon{color:var(--or);font-size:1rem}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:.71rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--marge);margin-bottom:.35rem}
+.field input,.field textarea,.field select{width:100%;padding:.6rem .85rem;border:1px solid var(--bord);border-radius:var(--r);font-family:'Inter',sans-serif;font-size:.9rem;color:var(--encre);background:var(--parchemin);transition:border-color .2s;outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--or);background:white}
+.field textarea{resize:vertical}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.6rem 1.4rem;border-radius:var(--r);font-family:'Inter',sans-serif;font-size:.79rem;font-weight:600;letter-spacing:.05em;cursor:pointer;border:none;transition:all .15s;text-transform:uppercase}
+.btn-or{background:var(--or);color:white}.btn-or:hover{background:#a87a1e}
+.btn-encre{background:var(--encre);color:white}.btn-encre:hover{background:var(--brun)}
+.btn-ghost{background:transparent;border:1.5px solid var(--bord);color:var(--marge)}.btn-ghost:hover{border-color:var(--sepia);color:var(--encre)}
+.btn-danger{background:transparent;border:1.5px solid #e8c0b8;color:var(--rouge)}.btn-danger:hover{background:#fdf0ee}
+.btn-violet{background:var(--violet);color:white}.btn-violet:hover{background:#52288a}
+.btn-sm{padding:.35rem .8rem;font-size:.71rem}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-row{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.2rem}
+.alert{padding:.7rem 1rem;border-radius:var(--r);font-size:.85rem;margin-bottom:1rem;display:none}
+.alert.on{display:block}
+.a-ok{background:#f0f6f0;border:1px solid #6a9a6a;color:#2a4a2a}
+.a-err{background:#fdf0ee;border:1px solid #c06050;color:#5a1a0a}
+.a-info{background:#f0f4f8;border:1px solid #6a8ab0;color:#1a3a5a}
+hr.sep{border:none;border-top:1px solid var(--creme);margin:1.2rem 0}
+.text-muted{color:var(--marge);font-size:.85rem}
+.bold{font-weight:600}
+.empty{text-align:center;padding:3rem 1rem;color:var(--marge)}
+.empty .ei{font-size:2.5rem;margin-bottom:.8rem}
+
+/* ══════════════════════════════════════════
+   CONNEXION
+══════════════════════════════════════════ */
+#conn-screen{position:fixed;inset:0;background:var(--noir);display:flex;align-items:center;justify-content:center;z-index:1000;flex-direction:column;gap:2rem}
+.conn-logo{font-family:'Cormorant Garamond',serif;font-size:2.8rem;font-weight:400;color:var(--blanc);text-align:center;line-height:1.1}
+.conn-logo em{color:var(--or);font-style:italic}
+.conn-logo small{display:block;font-size:.72rem;color:#4a4030;letter-spacing:.2em;text-transform:uppercase;margin-top:.5rem}
+.conn-card{background:#1a1810;border:1px solid #2a2418;border-radius:6px;padding:2rem;width:100%;max-width:380px}
+.conn-tabs{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:1.5rem;border:1px solid #2a2418;border-radius:var(--r);overflow:hidden}
+.conn-tab{padding:.6rem;text-align:center;font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;color:#5a4a38;background:transparent;transition:all .2s}
+.conn-tab.active{background:var(--or);color:white}
+.conn-form{display:none}.conn-form.active{display:block}
+.conn-field{margin-bottom:.9rem}
+.conn-field label{display:block;font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#5a4a38;margin-bottom:.3rem}
+.conn-field input,.conn-field select{width:100%;padding:.6rem .8rem;border:1px solid #2a2418;border-radius:var(--r);background:#0f0e0c;color:var(--creme);font-family:'Inter',sans-serif;font-size:.88rem;outline:none;transition:border-color .2s}
+.conn-field input:focus,.conn-field select:focus{border-color:var(--or)}
+.conn-field select option{background:#1a1810}
+.conn-submit{width:100%;padding:.7rem;background:var(--or);color:white;border:none;border-radius:var(--r);font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .2s;margin-top:.5rem}
+.conn-submit:hover{background:#a87a1e}
+.conn-error{color:#e08070;font-size:.82rem;margin-top:.6rem;display:none}
+.conn-note{color:#4a4030;font-size:.75rem;text-align:center;margin-top:.8rem}
+
+/* ══════════════════════════════════════════
+   CHAPITRES (élève)
+══════════════════════════════════════════ */
+.chap-card{background:var(--blanc);border:1px solid var(--bord);border-radius:var(--r);overflow:hidden;margin-bottom:1rem;transition:box-shadow .2s}
+.chap-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.chap-hdr{display:flex;align-items:center;padding:1rem 1.4rem;gap:1rem;cursor:pointer;border-bottom:1px solid transparent;transition:border-color .2s}
+.chap-card.open .chap-hdr{border-bottom-color:var(--creme)}
+.chap-num{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:600;color:var(--or);line-height:1;min-width:2rem}
+.chap-info{flex:1}
+.chap-titre{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;color:var(--encre)}
+.chap-desc{font-size:.82rem;color:var(--marge);margin-top:.1rem}
+.chap-body{display:none;padding:1.2rem 1.4rem}
+.chap-card.open .chap-body{display:block}
+.prog-wrap{background:var(--creme);border-radius:20px;height:6px;overflow:hidden;margin-top:.4rem}
+.prog-bar{height:100%;border-radius:20px;transition:width .5s}
+.prog-or{background:var(--or)}
+.prog-vt{background:var(--vert)}
+.dev-item{display:flex;align-items:center;gap:.8rem;padding:.65rem 0;border-bottom:1px solid var(--creme);cursor:pointer;transition:all .15s}
+.dev-item:last-child{border-bottom:none}
+.dev-item:hover{padding-left:.3rem}
+.d-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.d-or{background:var(--or)}.d-vt{background:var(--vert)}.d-gr{background:var(--bord)}
+.d-title{flex:1;font-size:.9rem;color:var(--encre)}
+.d-week{font-size:.75rem;color:var(--marge)}
+.badge{display:inline-block;font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:20px}
+.badge-or{background:#fdf4e0;color:#8a6a10}
+.badge-vt{background:#e8f4e8;color:var(--vert)}
+.badge-gr{background:var(--creme);color:var(--marge)}
+
+/* ══════════════════════════════════════════
+   DEVOIR VUE ÉLÈVE
+══════════════════════════════════════════ */
+.texte-lit{background:var(--creme);border-left:4px solid var(--or);padding:1.5rem 1.8rem;border-radius:0 var(--r) var(--r) 0;font-family:'Cormorant Garamond',serif;font-size:1.05rem;line-height:1.9;color:var(--encre);white-space:pre-wrap;user-select:none}
+.texte-source{text-align:right;font-style:italic;font-size:.82rem;color:var(--marge);margin-top:.6rem}
+.q-type-tag{display:inline-block;font-size:.67rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.15rem .5rem;border-radius:20px;margin-bottom:.4rem}
+.tag-ref{background:#e8f0f8;color:var(--bleu)}
+.tag-mob{background:#f0e8f8;color:var(--violet)}
+.tag-ana{background:#f4ece8;color:var(--rouge)}
+.q-block{margin-bottom:1.8rem;padding-bottom:1.8rem;border-bottom:1px solid var(--creme)}
+.q-block:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.q-label{font-family:'Cormorant Garamond',serif;font-size:1.05rem;color:var(--encre);margin-bottom:.6rem;line-height:1.5}
+.q-area{width:100%;padding:.7rem .9rem;border:1px solid var(--bord);border-radius:var(--r);font-family:'Inter',sans-serif;font-size:.88rem;color:var(--encre);background:var(--parchemin);resize:vertical;outline:none;transition:border-color .2s;min-height:90px}
+.q-area:focus{border-color:var(--or);background:white}
+.corr-box{margin-top:.8rem;padding:1rem 1.2rem;border-radius:var(--r);display:none}
+.corr-box.on{display:block}
+.corr-ia{border:1px solid #7aaa7a;background:#f4faf4}
+.corr-prof{border:1px solid var(--or);background:#fdf8ee;margin-top:.5rem}
+.corr-label{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem}
+.corr-ia .corr-label{color:#4a7a4a}
+.corr-prof .corr-label{color:#8a6a10}
+.corr-content{font-size:.88rem;line-height:1.7}
+.corr-ia .corr-content{color:#1a3a1a}
+.corr-prof .corr-content{color:#3a2a0a}
+
+/* Autocorrection étoiles */
+.autocorr-wrap{margin-top:1rem;padding:1rem;background:var(--parchemin);border:1px solid var(--bord);border-radius:var(--r)}
+.autocorr-title{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--marge);margin-bottom:.5rem}
+.stars-wrap{display:flex;gap:.3rem;margin-bottom:.5rem}
+.star{font-size:1.4rem;cursor:pointer;transition:transform .1s;filter:grayscale(1);opacity:.4}
+.star:hover,.star.on{filter:none;opacity:1;transform:scale(1.15)}
+.autocorr-label{font-size:.8rem;color:var(--marge);font-style:italic}
+
+/* Exercices interactifs */
+.exo-card{background:var(--blanc);border:1px solid var(--bord);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem;box-shadow:var(--sh)}
+.exo-type-badge{display:inline-block;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:.2rem .6rem;border-radius:20px;margin-bottom:.8rem}
+.exo-qcm{background:#e8f0f8;color:var(--bleu)}
+.exo-relier{background:#f0e8f8;color:var(--violet)}
+.exo-trous{background:#f4ece8;color:var(--rouge)}
+.exo-croises{background:#e8f4e8;color:var(--vert)}
+.exo-caches{background:#fdf4e0;color:#8a6010}
+.exo-image{background:#f8e8f4;color:#8a1060}
+
+/* QCM */
+.qcm-option{display:flex;align-items:center;gap:.7rem;padding:.6rem .9rem;border:1px solid var(--bord);border-radius:var(--r);margin-bottom:.4rem;cursor:pointer;transition:all .15s;font-size:.9rem}
+.qcm-option:hover{border-color:var(--or);background:var(--parchemin)}
+.qcm-option.selected{border-color:var(--or);background:#fdf4e0}
+.qcm-option.correct{border-color:var(--vert);background:#e8f4e8}
+.qcm-option.wrong{border-color:var(--rouge);background:#fdf0ee}
+.qcm-radio{width:16px;height:16px;border-radius:50%;border:2px solid var(--bord);flex-shrink:0;transition:all .15s}
+.qcm-option.selected .qcm-radio{border-color:var(--or);background:var(--or)}
+.qcm-option.correct .qcm-radio{border-color:var(--vert);background:var(--vert)}
+.qcm-option.wrong .qcm-radio{border-color:var(--rouge);background:var(--rouge)}
+
+/* Relier */
+.relier-wrap{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.relier-col{display:flex;flex-direction:column;gap:.5rem}
+.relier-item{padding:.6rem .9rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.88rem;cursor:pointer;transition:all .15s;background:var(--parchemin)}
+.relier-item:hover{border-color:var(--or)}
+.relier-item.selected{border-color:var(--or);background:#fdf4e0}
+.relier-item.linked{border-color:var(--vert);background:#e8f4e8}
+.relier-item.error{border-color:var(--rouge);background:#fdf0ee}
+
+/* Texte à trous */
+.trou{display:inline-block;border-bottom:2px solid var(--or);min-width:80px;padding:.1rem .3rem;margin:0 .3rem;font-size:.92rem;background:transparent;border-top:none;border-left:none;border-right:none;outline:none;text-align:center;font-family:'Cormorant Garamond',serif;color:var(--encre)}
+.trou.correct{border-color:var(--vert);color:var(--vert)}
+.trou.wrong{border-color:var(--rouge);color:var(--rouge)}
+
+/* Mots croisés */
+.crossword{display:inline-grid;gap:2px;margin:1rem 0}
+.cw-cell{width:34px;height:34px;border:1.5px solid var(--bord);display:flex;align-items:center;justify-content:center;position:relative;background:white}
+.cw-cell.black{background:var(--encre);border-color:var(--encre)}
+.cw-cell.active{border-color:var(--or)}
+.cw-input{width:100%;height:100%;border:none;text-align:center;font-size:.85rem;font-weight:700;text-transform:uppercase;background:transparent;outline:none;color:var(--encre)}
+.cw-num{position:absolute;top:1px;left:2px;font-size:.5rem;color:var(--marge);font-weight:700;line-height:1}
+.cw-clues{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;font-size:.82rem}
+.cw-clues h4{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--marge);margin-bottom:.5rem}
+.cw-clue{padding:.2rem 0;border-bottom:1px solid var(--creme)}
+
+/* Mots cachés */
+.wordsearch{display:inline-grid;gap:2px;margin:1rem 0;border:2px solid var(--bord);padding:4px;border-radius:var(--r);background:white}
+.ws-cell{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:2px;transition:all .1s;text-transform:uppercase}
+.ws-cell:hover{background:var(--creme)}
+.ws-cell.selecting{background:#fdf4e0}
+.ws-cell.found{background:#e8f4e8;color:var(--vert);font-weight:700}
+.ws-wordlist{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}
+.ws-word{font-size:.82rem;padding:.2rem .6rem;border:1px solid var(--bord);border-radius:20px;transition:all .2s}
+.ws-word.found{background:#e8f4e8;border-color:var(--vert);color:var(--vert);text-decoration:line-through}
+
+/* Comparaison images */
+.img-compare-wrap{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1rem 0}
+.img-panel{position:relative}
+.img-panel img{width:100%;border-radius:var(--r);border:2px solid var(--bord)}
+.img-panel-label{font-size:.75rem;font-weight:700;text-align:center;padding:.3rem;color:var(--marge);letter-spacing:.08em;text-transform:uppercase}
+.img-marker{position:absolute;width:28px;height:28px;border-radius:50%;background:var(--rouge);color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;cursor:pointer;transform:translate(-50%,-50%);transition:all .2s;z-index:5;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.img-marker:hover{transform:translate(-50%,-50%) scale(1.2)}
+.diff-list{margin-top:.8rem}
+.diff-item{display:flex;align-items:center;gap:.6rem;padding:.4rem .6rem;font-size:.85rem;border-bottom:1px solid var(--creme)}
+.diff-num{width:22px;height:22px;border-radius:50%;background:var(--rouge);color:white;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0}
+.diff-found{background:#e8f4e8;border-color:var(--vert)}
+.diff-found .diff-num{background:var(--vert)}
+
+/* Exercices supplémentaires IA */
+.extra-section{background:linear-gradient(135deg,#1a1810 0%,#2a2010 100%);border-radius:var(--r);padding:1.5rem;margin-top:1.5rem;border:1px solid #3a3020}
+.extra-section h3{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--or);margin-bottom:.3rem}
+.extra-section p{font-size:.82rem;color:#7a6a50;margin-bottom:1rem}
+.extra-q{background:rgba(255,255,255,.04);border:1px solid #2a2418;border-radius:var(--r);padding:1rem;margin-bottom:.8rem}
+.extra-q .q-label{color:var(--creme);font-size:.95rem}
+.extra-q .q-area{background:#0f0e0c;border-color:#2a2418;color:var(--creme)}
+.extra-q .q-area:focus{border-color:var(--or)}
+
+/* ══════════════════════════════════════════
+   ADMIN
+══════════════════════════════════════════ */
+.adm-tabs{display:flex;border-bottom:1px solid var(--bord);margin-bottom:1.5rem}
+.adm-tab{padding:.6rem 1.2rem;font-size:.77rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--marge);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.adm-tab.active{color:var(--or);border-bottom-color:var(--or)}
+.adm-tab:hover{color:var(--encre)}
+.adm-panel{display:none}.adm-panel.active{display:block}
+
+/* Éditeur d'exercices interactifs */
+.exo-editor-item{border:1px solid var(--bord);border-radius:var(--r);padding:1.2rem;margin-bottom:.8rem;background:var(--parchemin);position:relative}
+.exo-editor-num{position:absolute;top:-9px;left:10px;background:var(--violet);color:white;font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:2px}
+
+/* Tableau suivi */
+.suivi-table{width:100%;border-collapse:collapse;font-size:.83rem}
+.suivi-table th{background:var(--encre);color:var(--creme);padding:.55rem .8rem;text-align:left;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.suivi-table td{padding:.6rem .8rem;border-bottom:1px solid var(--creme);vertical-align:middle}
+.suivi-table tr:hover td{background:var(--parchemin)}
+.pct-b{display:inline-block;padding:.15rem .5rem;border-radius:20px;font-size:.72rem;font-weight:700}
+.pct-h{background:#e8f4e8;color:var(--vert)}
+.pct-m{background:#fdf4e0;color:#8a6a10}
+.pct-l{background:#fdf0ee;color:var(--rouge)}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.5rem}
+.stat-card{background:var(--blanc);border:1px solid var(--bord);border-radius:var(--r);padding:1.2rem;text-align:center;box-shadow:var(--sh)}
+.stat-val{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:600;color:var(--or);line-height:1}
+.stat-label{font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--marge);margin-top:.3rem}
+
+/* Éditeur question */
+.q-ed-item{border:1px solid var(--bord);border-radius:var(--r);padding:1rem;margin-bottom:.7rem;background:var(--parchemin);position:relative}
+.q-ed-num{position:absolute;top:-9px;left:10px;background:var(--rouge);color:white;font-size:.68rem;font-weight:700;padding:.1rem .4rem;border-radius:2px}
+.q-ed-row{display:grid;grid-template-columns:1fr auto;gap:.6rem;align-items:start}
+.rm-btn{background:none;border:none;cursor:pointer;color:var(--bord);font-size:1rem;line-height:1;padding:.3rem;transition:color .15s}
+.rm-btn:hover{color:var(--rouge)}
+
+/* Media editor */
+.media-ed-row{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:.5rem;align-items:center;padding:.5rem;background:var(--parchemin);border:1px solid var(--bord);border-radius:var(--r);margin-bottom:.5rem;font-size:.82rem}
+
+/* Chap admin */
+.chap-adm-card{border:1px solid var(--bord);border-radius:var(--r);overflow:hidden;margin-bottom:.8rem}
+.chap-adm-hdr{display:flex;align-items:center;padding:.8rem 1.2rem;background:var(--encre);gap:.8rem}
+.chap-adm-hdr .cn{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--or)}
+.chap-adm-hdr .ct{font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--creme);flex:1}
+.chap-adm-body{padding:.8rem 1.2rem;background:white}
+.dev-row{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--creme);font-size:.84rem}
+.dev-row:last-child{border-bottom:none}
+.dev-row .dr-t{flex:1;color:var(--encre)}
+.dr-w{color:var(--marge);font-size:.77rem}
+.tag-act{background:#e8f4e8;color:var(--vert);font-size:.68rem;font-weight:700;padding:.1rem .4rem;border-radius:2px}
+.tag-arc{background:var(--creme);color:var(--marge);font-size:.68rem;font-weight:700;padding:.1rem .4rem;border-radius:2px}
+
+/* Correction prof */
+.corr-prof-editor{background:#fdf8ee;border:2px solid var(--or);border-radius:var(--r);padding:1rem;margin-top:.7rem}
+.corr-prof-editor label{display:block;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a6a10;margin-bottom:.4rem}
+.corr-prof-editor textarea{width:100%;padding:.6rem .8rem;border:1px solid #e8c96a;border-radius:var(--r);font-family:'Inter',sans-serif;font-size:.88rem;background:white;color:var(--encre);resize:vertical;outline:none}
+.corr-prof-editor textarea:focus{border-color:var(--or)}
+
+/* PDF viewer */
+.pdf-viewer{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:1rem;overflow-y:auto;user-select:none}
+.pdf-toolbar{display:flex;align-items:center;gap:.8rem;background:#1a1810;border-radius:var(--r);padding:.5rem 1rem;margin-bottom:1rem;width:100%;max-width:900px;flex-shrink:0}
+.pdf-toolbar span{color:var(--creme);font-size:.82rem;flex:1}
+.pdf-btn{background:#2a2418;border:none;color:var(--creme);padding:.4rem .8rem;border-radius:var(--r);cursor:pointer;font-size:.82rem;transition:background .15s}
+.pdf-btn:hover{background:#3a3428}
+.pdf-btn.close{background:#4a2018;color:#f8b0a0}
+.pdf-canvas-wrap{position:relative;max-width:900px;width:100%}
+#pdf-canvas{width:100%;border-radius:var(--r);display:block}
+.pdf-wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10}
+.pdf-wm-text{font-family:'Cormorant Garamond',serif;font-size:clamp(1rem,4vw,2.5rem);color:rgba(201,150,42,.12);font-weight:600;white-space:nowrap;transform:rotate(-30deg);text-transform:uppercase;letter-spacing:.2em}
+
+/* Loader */
+.loader{display:inline-flex;gap:4px;align-items:center}
+.loader span{width:5px;height:5px;border-radius:50%;background:var(--or);animation:pulse 1.2s ease-in-out infinite}
+.loader span:nth-child(2){animation-delay:.2s}
+.loader span:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+
+/* Video embed */
+.video-embed{position:relative;padding-bottom:56.25%;height:0;border-radius:var(--r);overflow:hidden;margin-bottom:1rem;border:1px solid var(--bord)}
+.video-embed iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.media-item{display:flex;align-items:center;gap:.8rem;padding:.6rem .8rem;background:var(--parchemin);border:1px solid var(--bord);border-radius:var(--r);margin-bottom:.5rem;cursor:pointer;transition:all .15s;font-size:.85rem}
+.media-item:hover{border-color:var(--or);background:white}
+
+/* Setup screen */
+.setup-screen{max-width:600px;margin:0 auto}
+.setup-step{background:var(--blanc);border:1px solid var(--bord);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem}
+.setup-step h3{font-family:'Cormorant Garamond',serif;font-size:1.1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
+.setup-step code{background:var(--creme);padding:.15rem .4rem;border-radius:2px;font-size:.82rem;font-family:monospace}
+
+@media(max-width:600px){
+  #sidebar{display:none}
+  #content{padding:1rem}
+  .g2,.g3{grid-template-columns:1fr}
+  .relier-wrap{grid-template-columns:1fr}
+  .img-compare-wrap{grid-template-columns:1fr}
+  .cw-clues{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SETUP SUPABASE (première fois)
+══════════════════════════════════════ -->
+<div id="setup-screen" style="display:none;padding:2rem;background:var(--parchemin);min-height:100vh">
+  <div class="setup-screen">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:2rem;margin-bottom:1.5rem;color:var(--encre)">
+      ⚙️ Configuration initiale
+    </div>
+    <div class="setup-step">
+      <h3>1. Renseignez vos clés Supabase</h3>
+      <p class="text-muted" style="margin-bottom:.8rem">Trouvez ces informations dans votre tableau de bord Supabase → Settings → API</p>
+      <div class="field"><label>URL du projet Supabase</label>
+        <input type="text" id="setup-url" placeholder="https://xxxxxxxxxxxx.supabase.co"></div>
+      <div class="field"><label>Clé publique (anon key)</label>
+        <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></div>
+      <button class="btn btn-or" onclick="saveConfig()">Sauvegarder et continuer</button>
+    </div>
+    <div class="setup-step">
+      <h3>2. Script SQL à exécuter dans Supabase</h3>
+      <p class="text-muted" style="margin-bottom:.8rem">Dans Supabase → SQL Editor, collez et exécutez ce script :</p>
+      <textarea readonly style="width:100%;height:320px;font-family:monospace;font-size:.75rem;padding:.8rem;border:1px solid var(--bord);border-radius:var(--r);background:#f0ebe0;color:var(--encre);resize:vertical">-- PROFILES
+create table if not exists public.profiles (
+  id uuid references auth.users primary key,
+  prenom text not null,
+  nom text not null,
+  classe text default '',
+  role text default 'eleve' check (role in ('eleve','prof')),
+  created_at timestamptz default now()
+);
+alter table public.profiles enable row level security;
+create policy "Lecture profil propre" on public.profiles for select using (auth.uid() = id);
+create policy "Prof lit tout" on public.profiles for select using (
+  exists(select 1 from public.profiles where id=auth.uid() and role='prof'));
+create policy "Mise à jour propre" on public.profiles for update using (auth.uid() = id);
+
+-- CHAPITRES
+create table if not exists public.chapitres (
+  id uuid primary key default gen_random_uuid(),
+  titre text not null,
+  description text default '',
+  ordre int default 0,
+  created_at timestamptz default now()
+);
+alter table public.chapitres enable row level security;
+create policy "Lecture chapitres" on public.chapitres for select to authenticated using (true);
+create policy "Écriture prof" on public.chapitres for all using (
+  exists(select 1 from public.profiles where id=auth.uid() and role='prof'));
+
+-- DEVOIRS
+create table if not exists public.devoirs (
+  id uuid primary key default gen_random_uuid(),
+  chap_id uuid references public.chapitres,
+  titre text not null,
+  semaine text default '',
+  theme text default '',
+  texte text default '',
+  source text default '',
+  questions jsonb default '[]',
+  medias jsonb default '[]',
+  exercices jsonb default '[]',
+  correction_prof jsonb default '{}',
+  publie boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table public.devoirs enable row level security;
+create policy "Élève lit publiés" on public.devoirs for select to authenticated using (publie = true);
+create policy "Prof lit tout" on public.devoirs for select using (
+  exists(select 1 from public.profiles where id=auth.uid() and role='prof'));
+create policy "Prof écrit" on public.devoirs for all using (
+  exists(select 1 from public.profiles where id=auth.uid() and role='prof'));
+
+-- REPONSES
+create table if not exists public.reponses (
+  id uuid primary key default gen_random_uuid(),
+  devoir_id uuid references public.devoirs,
+  eleve_id uuid references public.profiles,
+  answers jsonb default '{}',
+  corrections_ia jsonb default '{}',
+  corrections_exo jsonb default '{}',
+  autocorrection jsonb default '{}',
+  etoiles jsonb default '{}',
+  submitted_at timestamptz default now(),
+  unique(devoir_id, eleve_id)
+);
+alter table public.reponses enable row level security;
+create policy "Élève voit ses réponses" on public.reponses for select using (eleve_id = auth.uid());
+create policy "Élève écrit ses réponses" on public.reponses for insert with check (eleve_id = auth.uid());
+create policy "Élève modifie ses réponses" on public.reponses for update using (eleve_id = auth.uid());
+create policy "Prof voit tout" on public.reponses for select using (
+  exists(select 1 from public.profiles where id=auth.uid() and role='prof'));
+
+-- TRIGGER profil auto
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, prenom, nom, classe, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'prenom', 'Élève'),
+    coalesce(new.raw_user_meta_data->>'nom', ''),
+    coalesce(new.raw_user_meta_data->>'classe', ''),
+    coalesce(new.raw_user_meta_data->>'role', 'eleve')
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();</textarea>
+      <button class="btn btn-ghost btn-sm" style="margin-top:.5rem" onclick="copySQL()">📋 Copier le SQL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     ÉCRAN DE CONNEXION
+══════════════════════════════════════ -->
+<div id="conn-screen">
+  <div class="conn-logo">Atelier <em>Littéraire</em><small>Lycée · Classe de Première</small></div>
+  <div class="conn-card">
+    <div class="conn-tabs">
+      <div class="conn-tab active" onclick="switchTab('eleve')">Élève</div>
+      <div class="conn-tab" onclick="switchTab('prof')">Enseignante</div>
+    </div>
+
+    <!-- Élève : connexion -->
+    <div class="conn-form active" id="tab-conn-eleve">
+      <div class="conn-field"><label>Email</label>
+        <input type="email" id="e-email" placeholder="marie.dupont@eleve.fr"></div>
+      <div class="conn-field"><label>Mot de passe</label>
+        <input type="password" id="e-pw" onkeydown="if(event.key==='Enter')connEleve()"></div>
+      <button class="conn-submit" onclick="connEleve()">Se connecter</button>
+      <div style="text-align:center;margin-top:.7rem">
+        <span style="color:#5a4a38;font-size:.78rem;cursor:pointer" onclick="showInscription()">Première fois ? Créer un compte →</span>
+      </div>
+      <div class="conn-error" id="err-conn-eleve"></div>
+    </div>
+
+    <!-- Élève : inscription -->
+    <div class="conn-form" id="tab-inscr-eleve">
+      <div class="g2" style="gap:.7rem;margin-bottom:.7rem">
+        <div class="conn-field"><label>Prénom</label><input type="text" id="i-prenom" placeholder="Marie"></div>
+        <div class="conn-field"><label>Nom</label><input type="text" id="i-nom" placeholder="Dupont"></div>
+      </div>
+      <div class="conn-field"><label>Classe</label>
+        <select id="i-classe">
+          <option value="">— Choisir —</option>
+          <option>1re A</option><option>1re B</option><option>1re C</option><option>1re D</option>
+        </select>
+      </div>
+      <div class="conn-field"><label>Email</label><input type="email" id="i-email" placeholder="marie.dupont@eleve.fr"></div>
+      <div class="conn-field"><label>Mot de passe (min. 8 caractères)</label>
+        <input type="password" id="i-pw" placeholder="••••••••"></div>
+      <button class="conn-submit" onclick="inscrireEleve()">Créer mon compte</button>
+      <div style="text-align:center;margin-top:.7rem">
+        <span style="color:#5a4a38;font-size:.78rem;cursor:pointer" onclick="showConnexion()">← Déjà inscrit ? Se connecter</span>
+      </div>
+      <div class="conn-error" id="err-inscr"></div>
+    </div>
+
+    <!-- Prof -->
+    <div class="conn-form" id="tab-conn-prof">
+      <div class="conn-field"><label>Email enseignante</label>
+        <input type="email" id="p-email" placeholder="prof@lycee.fr"></div>
+      <div class="conn-field"><label>Mot de passe</label>
+        <input type="password" id="p-pw" onkeydown="if(event.key==='Enter')connProf()"></div>
+      <button class="conn-submit" onclick="connProf()">Accéder au tableau de bord</button>
+      <div class="conn-error" id="err-conn-prof"></div>
+    </div>
+
+    <div class="conn-note">⚙️ <span style="cursor:pointer;color:#7a6050" onclick="showSetup()">Configurer Supabase (première fois)</span></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     APP PRINCIPALE
+══════════════════════════════════════ -->
+<div id="app" style="display:none">
+  <div id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">Atelier <em>Littéraire</em></div>
+      <div class="sb-sub" id="sb-role">—</div>
+    </div>
+    <div id="nav-eleve">
+      <div class="sb-section">Cours</div>
+      <div class="sb-item active" onclick="goto('chapitres')" data-p="chapitres"><span class="ico">📚</span>Chapitres & devoirs</div>
+      <div class="sb-item" onclick="goto('progres')" data-p="progres"><span class="ico">📊</span>Mes progrès</div>
+    </div>
+    <div id="nav-prof" style="display:none">
+      <div class="sb-section">Gestion</div>
+      <div class="sb-item active" onclick="goto('adm-chapitres')" data-p="adm-chapitres"><span class="ico">📚</span>Chapitres</div>
+      <div class="sb-item" onclick="goto('adm-devoir')" data-p="adm-devoir"><span class="ico">✏️</span>Nouveau devoir</div>
+      <div class="sb-item" onclick="goto('adm-modifier')" data-p="adm-modifier"><span class="ico">🔧</span>Modifier un devoir</div>
+      <div class="sb-item" onclick="goto('adm-corrections')" data-p="adm-corrections"><span class="ico">✅</span>Corrections prof</div>
+      <div class="sb-section">Suivi</div>
+      <div class="sb-item" onclick="goto('adm-suivi')" data-p="adm-suivi"><span class="ico">📊</span>Suivi élèves</div>
+      <div class="sb-item" onclick="goto('adm-reponses')" data-p="adm-reponses"><span class="ico">📝</span>Réponses détaillées</div>
+    </div>
+    <div class="sb-spacer"></div>
+    <div class="sb-user">
+      <div class="sb-avatar" id="sb-av">?</div>
+      <div class="sb-name" id="sb-name">—</div>
+    </div>
+    <div style="padding:.5rem 1.2rem .8rem">
+      <div class="sb-item" onclick="deconn()" style="padding:.4rem 0;color:#5a4030;font-size:.78rem">
+        <span class="ico">↩</span>Déconnexion
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <button id="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">☰</button>
+      <div id="topbar-title">Atelier Littéraire</div>
+    </div>
+    <div id="content">
+
+      <!-- ÉLÈVE : Chapitres -->
+      <div class="panel active" id="panel-chapitres">
+        <div id="chapitres-list"></div>
+      </div>
+
+      <!-- ÉLÈVE : Devoir -->
+      <div class="panel" id="panel-devoir">
+        <div style="font-size:.78rem;color:var(--marge);margin-bottom:1rem;cursor:pointer" onclick="goto('chapitres')">← Retour aux chapitres</div>
+        <div id="devoir-view"></div>
+      </div>
+
+      <!-- ÉLÈVE : Progrès -->
+      <div class="panel" id="panel-progres">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">📊</span>Mes progrès</div>
+          <div id="progres-content"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Chapitres -->
+      <div class="panel" id="panel-adm-chapitres">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">📚</span>Gestion des chapitres</div>
+          <div class="g3 mb-1">
+            <div class="field"><label>Titre</label><input type="text" id="chap-titre" placeholder="ex. Le roman réaliste"></div>
+            <div class="field"><label>Description</label><input type="text" id="chap-desc" placeholder="ex. Balzac, Flaubert, Zola"></div>
+            <div class="field" style="display:flex;align-items:flex-end">
+              <button class="btn btn-or" style="width:100%" onclick="creerChapitre()">+ Créer</button>
+            </div>
+          </div>
+          <div class="alert a-ok" id="chap-ok"></div>
+          <hr class="sep">
+          <div id="chap-admin-list"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Nouveau devoir -->
+      <div class="panel" id="panel-adm-devoir">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">✏️</span>Créer un devoir</div>
+          <div id="devoir-form-content"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Modifier un devoir -->
+      <div class="panel" id="panel-adm-modifier">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">🔧</span>Modifier un devoir existant</div>
+          <div class="field">
+            <label>Choisir le devoir à modifier</label>
+            <select id="sel-modifier" onchange="chargerDevoirAModifier()">
+              <option value="">— Sélectionner —</option>
+            </select>
+          </div>
+          <div id="modifier-form-content"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Corrections prof -->
+      <div class="panel" id="panel-adm-corrections">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">✅</span>Saisir les corrections</div>
+          <p class="text-muted" style="margin-bottom:1rem">Les corrections que vous saisissez ici seront visibles par les élèves après soumission, pour leur permettre de s'autocorriger.</p>
+          <div class="field">
+            <label>Choisir le devoir</label>
+            <select id="sel-corr-devoir" onchange="chargerCorrProf()">
+              <option value="">— Sélectionner —</option>
+            </select>
+          </div>
+          <div id="corr-prof-form"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Suivi -->
+      <div class="panel" id="panel-adm-suivi">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">📊</span>Tableau de suivi</div>
+          <div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:.8rem">
+            <select id="fil-classe" style="padding:.4rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)" onchange="renderSuivi()">
+              <option value="">Toutes les classes</option>
+              <option>1re A</option><option>1re B</option><option>1re C</option><option>1re D</option>
+            </select>
+            <select id="fil-chap" style="padding:.4rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)" onchange="renderSuivi()">
+              <option value="">Tous les chapitres</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+          </div>
+          <div style="overflow-x:auto"><table class="suivi-table" id="suivi-table"></table></div>
+        </div>
+      </div>
+
+      <!-- ADMIN : Réponses -->
+      <div class="panel" id="panel-adm-reponses">
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">📝</span>Réponses détaillées</div>
+          <div class="field">
+            <label>Devoir</label>
+            <select id="fil-dev-rep" style="padding:.5rem .8rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.85rem;background:var(--parchemin)" onchange="renderReponses()">
+              <option value="">— Choisir —</option>
+            </select>
+          </div>
+          <div id="reponses-detail"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- PDF Viewer -->
+<div id="pdf-viewer" class="pdf-viewer" style="display:none">
+  <div class="pdf-toolbar">
+    <span id="pdf-title">Document</span>
+    <button class="pdf-btn" onclick="pdfPrev()">◀</button>
+    <span id="pdf-info" style="color:var(--creme)">1/1</span>
+    <button class="pdf-btn" onclick="pdfNext()">▶</button>
+    <button class="pdf-btn close" onclick="closePDF()">✕ Fermer</button>
+  </div>
+  <div class="pdf-canvas-wrap">
+    <canvas id="pdf-canvas"></canvas>
+    <div class="pdf-wm"><div class="pdf-wm-text" id="pdf-wm"></div></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONFIG & SUPABASE
+// ══════════════════════════════════════════════════
+let SB = null;
+let currentUser = null;
+let currentProfile = null;
+let chapitres = [], devoirs = [], mesReponses = [];
+let qEditor = [], mEditor = [], exoEditor = [];
+let pdfDoc = null, pdfPage = 1, pdfTotal = 1;
+
+// Types de questions
+const Q_TYPES = [
+  { val:'reformulation', label:'Reformulation', cls:'tag-ref' },
+  { val:'mobilisation',  label:'Réactivation & mobilisation des connaissances', cls:'tag-mob' },
+  { val:'analyse',       label:'Analyse littéraire', cls:'tag-ana' }
+];
+
+// Types d'exercices interactifs
+const EXO_TYPES = [
+  { val:'qcm',      label:'QCM', badge:'exo-qcm' },
+  { val:'relier',   label:'Colonnes à relier', badge:'exo-relier' },
+  { val:'trous',    label:'Texte à trous', badge:'exo-trous' },
+  { val:'croises',  label:'Mots croisés', badge:'exo-croises' },
+  { val:'caches',   label:'Mots cachés', badge:'exo-caches' },
+  { val:'image',    label:'Comparaison d\'images', badge:'exo-image' }
+];
+
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Config Supabase ──────────────────────────────
+function initSupabase() {
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (!url || !key) return false;
+  SB = window.supabase.createClient(url, key);
+  return true;
+}
+
+function saveConfig() {
+  const url = document.getElementById('setup-url').value.trim();
+  const key = document.getElementById('setup-key').value.trim();
+  if (!url || !key) return alert('Renseignez les deux champs.');
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('conn-screen').style.display  = 'flex';
+  initSupabase();
+}
+
+function showSetup() {
+  document.getElementById('conn-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'block';
+}
+
+function copySQL() {
+  const ta = document.querySelector('#setup-screen textarea');
+  navigator.clipboard.writeText(ta.value).then(() => alert('SQL copié !'));
+}
+
+// ══════════════════════════════════════════════════
+//  CONNEXION
+// ══════════════════════════════════════════════════
+function switchTab(t) {
+  document.querySelectorAll('.conn-tab').forEach((el,i)=>
+    el.classList.toggle('active',['eleve','prof'][i]===t));
+  ['tab-conn-eleve','tab-inscr-eleve','tab-conn-prof'].forEach(id=>
+    document.getElementById(id).classList.remove('active'));
+  document.getElementById(t==='prof'?'tab-conn-prof':'tab-conn-eleve').classList.add('active');
+}
+function showInscription() {
+  document.getElementById('tab-conn-eleve').classList.remove('active');
+  document.getElementById('tab-inscr-eleve').classList.add('active');
+}
+function showConnexion() {
+  document.getElementById('tab-inscr-eleve').classList.remove('active');
+  document.getElementById('tab-conn-eleve').classList.add('active');
+}
+
+async function connEleve() {
+  if (!SB) return showErr('err-conn-eleve','Supabase non configuré. Cliquez sur ⚙️ en bas.');
+  const email = document.getElementById('e-email').value.trim();
+  const pw    = document.getElementById('e-pw').value;
+  const {data,error} = await SB.auth.signInWithPassword({email,password:pw});
+  if (error) return showErr('err-conn-eleve', error.message);
+  await loadProfile(data.user);
+}
+
+async function inscrireEleve() {
+  if (!SB) return showErr('err-inscr','Supabase non configuré.');
+  const prenom = document.getElementById('i-prenom').value.trim();
+  const nom    = document.getElementById('i-nom').value.trim();
+  const classe = document.getElementById('i-classe').value;
+  const email  = document.getElementById('i-email').value.trim();
+  const pw     = document.getElementById('i-pw').value;
+  if (!prenom||!nom||!classe||!email||pw.length<8)
+    return showErr('err-inscr','Tous les champs sont obligatoires (mot de passe ≥ 8 caractères).');
+  const {data,error} = await SB.auth.signUp({
+    email, password:pw,
+    options:{ data:{ prenom, nom, classe, role:'eleve' } }
+  });
+  if (error) return showErr('err-inscr', error.message);
+  showErr('err-inscr','✓ Compte créé ! Vérifiez votre email pour confirmer.','#4a9a4a');
+}
+
+async function connProf() {
+  if (!SB) return showErr('err-conn-prof','Supabase non configuré.');
+  const email = document.getElementById('p-email').value.trim();
+  const pw    = document.getElementById('p-pw').value;
+  const {data,error} = await SB.auth.signInWithPassword({email,password:pw});
+  if (error) return showErr('err-conn-prof', error.message);
+  await loadProfile(data.user);
+}
+
+async function loadProfile(user) {
+  const {data:prof, error} = await SB.from('profiles').select('*').eq('id',user.id).single();
+  if (error || !prof) return showErr('err-conn-eleve','Profil introuvable. Reconnectez-vous.');
+  currentUser    = user;
+  currentProfile = prof;
+  lancerApp();
+}
+
+async function deconn() {
+  await SB.auth.signOut();
+  currentUser = currentProfile = null;
+  chapitres=[]; devoirs=[]; mesReponses=[];
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('conn-screen').style.display = 'flex';
+}
+
+function showErr(id, msg, color='#e08070') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg; el.style.color = color; el.style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════
+//  LANCEMENT APP
+// ══════════════════════════════════════════════════
+async function lancerApp() {
+  document.getElementById('conn-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  const isProf = currentProfile.role === 'prof';
+  document.getElementById('sb-role').textContent = isProf ? 'Enseignante' : (currentProfile.classe||'Élève');
+  document.getElementById('sb-name').textContent = `${currentProfile.prenom} ${currentProfile.nom}`;
+  document.getElementById('sb-av').textContent = (currentProfile.prenom[0]||'?').toUpperCase();
+  document.getElementById('nav-eleve').style.display = isProf ? 'none' : 'block';
+  document.getElementById('nav-prof').style.display  = isProf ? 'block' : 'none';
+  await chargerDonnees();
+  if (isProf) { goto('adm-chapitres'); renderChapAdmin(); peuplerSelects(); }
+  else        { goto('chapitres'); renderChapitresEleve(); }
+}
+
+async function chargerDonnees() {
+  const [{data:c},{data:d}] = await Promise.all([
+    SB.from('chapitres').select('*').order('ordre'),
+    currentProfile.role==='prof'
+      ? SB.from('devoirs').select('*').order('created_at',{ascending:false})
+      : SB.from('devoirs').select('*').eq('publie',true).order('created_at',{ascending:false})
+  ]);
+  chapitres = c||[]; devoirs = d||[];
+  if (currentProfile.role==='eleve') {
+    const {data:r} = await SB.from('reponses').select('*').eq('eleve_id',currentUser.id);
+    mesReponses = r||[];
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════
+function goto(p) {
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+p).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(el=>
+    el.classList.toggle('active', el.dataset.p===p));
+  if (p==='progres')      renderProgres();
+  if (p==='adm-suivi')    { renderStats(); renderSuivi(); peuplerFilChap(); }
+  if (p==='adm-reponses') { peuplerFilDev(); renderReponses(); }
+  if (p==='adm-chapitres') renderChapAdmin();
+  if (p==='adm-devoir')   { peuplerSelects(); renderDevoirForm('new'); }
+  if (p==='adm-modifier') { peuplerSelModifier(); }
+  if (p==='adm-corrections') peuplerSelCorr();
+}
+
+// ══════════════════════════════════════════════════
+//  ÉLÈVE — Chapitres
+// ══════════════════════════════════════════════════
+function renderChapitresEleve() {
+  const c = document.getElementById('chapitres-list');
+  if (!chapitres.length) {
+    c.innerHTML='<div class="empty"><div class="ei">📚</div><p>Aucun chapitre disponible.</p></div>'; return;
+  }
+  c.innerHTML = chapitres.map((ch,idx)=>{
+    const devs  = devoirs.filter(d=>d.chap_id===ch.id);
+    const done  = devs.filter(d=>mesReponses.some(r=>r.devoir_id===d.id)).length;
+    const pct   = devs.length ? Math.round(done/devs.length*100) : 0;
+    return `<div class="chap-card" id="cc-${ch.id}">
+      <div class="chap-hdr" onclick="toggleChap('${ch.id}')">
+        <div class="chap-num">${String(idx+1).padStart(2,'0')}</div>
+        <div class="chap-info">
+          <div class="chap-titre">${esc(ch.titre)}</div>
+          <div class="chap-desc">${esc(ch.description||'')}</div>
+          <div class="prog-wrap" style="margin-top:.5rem">
+            <div class="prog-bar ${pct===100?'prog-vt':'prog-or'}" style="width:${pct}%"></div>
+          </div>
+        </div>
+        <div class="badge ${pct===100?'badge-vt':'badge-or'}">${done}/${devs.length} fait${done>1?'s':''}</div>
+      </div>
+      <div class="chap-body">
+        ${devs.length ? devs.map(d=>{
+          const fait = mesReponses.some(r=>r.devoir_id===d.id);
+          return `<div class="dev-item" onclick="ouvrirDevoir('${d.id}')">
+            <div class="d-dot ${fait?'d-vt':'d-or'}"></div>
+            <div class="d-title">${esc(d.titre)}</div>
+            <div class="d-week">${esc(d.semaine||'')}</div>
+            <span>→</span>
+          </div>`;
+        }).join('') : '<div class="text-muted" style="padding:.5rem 0">Aucun devoir publié dans ce chapitre.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleChap(id) { document.getElementById('cc-'+id).classList.toggle('open'); }
+
+// ══════════════════════════════════════════════════
+//  ÉLÈVE — Afficher un devoir
+// ══════════════════════════════════════════════════
+async function ouvrirDevoir(did) {
+  const d = devoirs.find(x=>x.id===did);
+  if (!d) return;
+  goto('devoir');
+  const existing = mesReponses.find(r=>r.devoir_id===did);
+  const ch = chapitres.find(c=>c.id===d.chap_id);
+  const corrProf = d.correction_prof || {};
+  const container = document.getElementById('devoir-view');
+
+  // Médias
+  let mediasHtml = '';
+  if (d.medias?.length) {
+    mediasHtml = `<div class="card">
+      <div class="card-title"><span class="ct-icon">🎬</span>Ressources</div>
+      ${d.medias.map(m=>`<div class="media-item" onclick='ouvrirMedia(${JSON.stringify(m)})'>
+        <span>${m.type==='youtube'?'▶':m.type==='podcast'?'🎙':'📄'}</span>
+        <span style="flex:1">${esc(m.label)}</span>
+        <span class="text-muted">${m.type==='youtube'?'Vidéo':m.type==='podcast'?'Podcast':'PDF'}</span>
+      </div>`).join('')}
+      <div id="media-embed"></div>
+    </div>`;
+  }
+
+  // Questions rédactionnelles
+  const qHtml = (d.questions||[]).map((q,i)=>{
+    const t    = Q_TYPES.find(x=>x.val===q.type)||Q_TYPES[0];
+    const prevRep  = existing?.answers?.[i]||'';
+    const prevCorr = existing?.corrections_ia?.[i]||'';
+    const prevCorrP = corrProf[i]||'';
+    const prevStar  = existing?.etoiles?.[i]||0;
+    const prevAuto  = existing?.autocorrection?.[i]||'';
+    return `<div class="q-block">
+      <span class="q-type-tag ${t.cls}">${t.label}</span>
+      <div class="q-label"><strong>${i+1}.</strong> ${esc(q.texte)}</div>
+      <textarea class="q-area" id="qrep-${i}" rows="4" placeholder="Votre réponse…">${esc(prevRep)}</textarea>
+      <div class="corr-box corr-ia ${prevCorr?'on':''}" id="corr-ia-${i}">
+        <div class="corr-label">✦ Pistes de l'IA</div>
+        <div class="corr-content" id="corr-ia-txt-${i}">${prevCorr}</div>
+      </div>
+      ${prevCorrP ? `<div class="corr-box corr-prof on" id="corr-prof-${i}">
+        <div class="corr-label">📝 Correction de l'enseignante</div>
+        <div class="corr-content">${esc(prevCorrP)}</div>
+      </div>` : `<div class="corr-box corr-prof" id="corr-prof-${i}"></div>`}
+      <div class="autocorr-wrap ${prevCorr?'':'hidden'}" id="autocorr-${i}" style="${prevCorr?'':'display:none'}">
+        <div class="autocorr-title">Mon auto-évaluation</div>
+        <div class="stars-wrap" id="stars-${i}">
+          ${[1,2,3,4,5].map(n=>`<span class="star ${prevStar>=n?'on':''}" onclick="setStars(${i},${n})" title="${n} étoile${n>1?'s':''}">★</span>`).join('')}
+        </div>
+        <div class="autocorr-label" id="star-label-${i}">${starLabel(prevStar)}</div>
+        <textarea class="q-area" id="auto-${i}" rows="2" placeholder="Note personnelle…" style="margin-top:.5rem;font-size:.82rem">${esc(prevAuto)}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Exercices interactifs
+  const exosHtml = (d.exercices||[]).length
+    ? `<div class="card"><div class="card-title"><span class="ct-icon">🎯</span>Exercices interactifs</div>
+       ${(d.exercices).map((ex,i)=>renderExoEleve(ex,i,did,existing)).join('')}</div>`
+    : '';
+
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;flex-wrap:wrap">
+      <span class="text-muted">${esc(ch?.titre||'')}</span>
+      <span style="color:var(--bord)">›</span>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${esc(d.titre)}</span>
+      ${d.semaine?`<span class="text-muted" style="margin-left:auto">${esc(d.semaine)}</span>`:''}
+    </div>
+    ${mediasHtml}
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">§</span>Texte à étudier</div>
+      <div class="texte-lit" oncontextmenu="return false">${esc(d.texte)}</div>
+      ${d.source?`<div class="texte-source">${esc(d.source)}</div>`:''}
+    </div>
+    ${(d.questions||[]).length ? `<div class="card">
+      <div class="card-title"><span class="ct-icon">✎</span>Questions</div>
+      ${qHtml}
+      <hr class="sep">
+      <button class="btn btn-encre" id="btn-sub" onclick="soumettreDevoir('${did}')">Soumettre & obtenir les corrections</button>
+      <div class="alert a-ok" id="sub-ok">✓ Réponses enregistrées.</div>
+      <div class="alert a-err" id="sub-err">Merci de répondre à toutes les questions.</div>
+    </div>` : ''}
+    ${exosHtml}
+    <div id="extra-zone"></div>`;
+
+  if (existing && Object.keys(existing.answers||{}).length >= (d.questions||[]).length && d.questions?.length) {
+    renderExercicesIA(did);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  ÉLÈVE — Soumettre
+// ══════════════════════════════════════════════════
+async function soumettreDevoir(did) {
+  const d = devoirs.find(x=>x.id===did);
+  const btn = document.getElementById('btn-sub');
+  const okEl = document.getElementById('sub-ok');
+  const errEl = document.getElementById('sub-err');
+  okEl.classList.remove('on'); errEl.classList.remove('on');
+
+  let allOk = true;
+  (d.questions||[]).forEach((_,i)=>{ if(!document.getElementById(`qrep-${i}`)?.value.trim()) allOk=false; });
+  if (!allOk) { errEl.classList.add('on'); return; }
+
+  btn.disabled=true;
+  btn.innerHTML=`<span class="loader"><span></span><span></span><span></span></span> Correction en cours…`;
+
+  const answers={}, corrs={};
+  for (let i=0;i<d.questions.length;i++) {
+    const rep = document.getElementById(`qrep-${i}`).value.trim();
+    answers[i]=rep;
+    const cb = document.getElementById(`corr-ia-${i}`);
+    const ct = document.getElementById(`corr-ia-txt-${i}`);
+    const ac = document.getElementById(`autocorr-${i}`);
+    cb.classList.add('on');
+    ct.innerHTML=`<span class="loader"><span></span><span></span><span></span></span>`;
+
+    const qtype = Q_TYPES.find(x=>x.val===d.questions[i].type)||Q_TYPES[0];
+    const prompt=`Tu es un professeur de français de lycée (Première).
+Texte étudié : "${d.texte.slice(0,600)}…" (${d.source||''})
+Thème : ${d.theme||''}
+
+Question ${i+1} — ${qtype.label} :
+${d.questions[i].texte}
+
+Réponse de l'élève : ${rep}
+
+CORRECTION GUIDÉE (pistes, pas la réponse complète) :
+- Ce qui est juste dans la réponse (1 phrase).
+- 2-3 pistes numérotées précises avec références au texte.
+- Si notion mal comprise, réexplique brièvement.
+- Bienveillant, exigeant. Max 10 lignes. HTML simple (<p><ol><li>).`;
+
+    try {
+      const r=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+      });
+      const data=await r.json();
+      const txt=data.content?.[0]?.text||'<p>Correction indisponible.</p>';
+      ct.innerHTML=txt; corrs[i]=txt;
+      if (ac) ac.style.display='block';
+    } catch(e){ ct.innerHTML='<p>Erreur.</p>'; }
+  }
+
+  // Sauvegarder dans Supabase
+  const existing = mesReponses.find(r=>r.devoir_id===did);
+  const auto={}, etoiles={};
+  (d.questions||[]).forEach((_,i)=>{
+    auto[i]   = document.getElementById(`auto-${i}`)?.value||'';
+    etoiles[i] = parseInt(document.getElementById(`stars-${i}`)?.dataset.val||'0');
+  });
+  const payload={devoir_id:did,eleve_id:currentUser.id,answers,corrections_ia:corrs,autocorrection:auto,etoiles};
+
+  if (existing) {
+    await SB.from('reponses').update(payload).eq('id',existing.id);
+    const idx=mesReponses.findIndex(r=>r.id===existing.id);
+    mesReponses[idx]={...existing,...payload};
+  } else {
+    const {data:nr}=await SB.from('reponses').insert(payload).select().single();
+    if (nr) mesReponses.push(nr);
+  }
+
+  btn.disabled=false;
+  btn.innerHTML='Soumettre & obtenir les corrections';
+  okEl.classList.add('on');
+
+  // Afficher correction prof si disponible
+  const corrProf = d.correction_prof||{};
+  (d.questions||[]).forEach((_,i)=>{
+    if (corrProf[i]) {
+      const cpEl = document.getElementById(`corr-prof-${i}`);
+      if (cpEl) {
+        cpEl.innerHTML=`<div class="corr-label">📝 Correction de l'enseignante</div><div class="corr-content">${esc(corrProf[i])}</div>`;
+        cpEl.classList.add('on');
+      }
+    }
+  });
+
+  renderExercicesIA(did);
+}
+
+// ══════════════════════════════════════════════════
+//  ÉLÈVE — Étoiles autocorrection
+// ══════════════════════════════════════════════════
+function setStars(qIdx, val) {
+  const wrap = document.getElementById(`stars-${qIdx}`);
+  if (!wrap) return;
+  wrap.dataset.val = val;
+  wrap.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('on',i<val));
+  const lbl = document.getElementById(`star-label-${qIdx}`);
+  if (lbl) lbl.textContent = starLabel(val);
+}
+
+function starLabel(n) {
+  return ['','Insuffisant — à reprendre entièrement','Fragile — des lacunes importantes','Correct — quelques points à consolider','Bien — réponse solide, quelques améliorations','Très bien — maîtrise complète'][n]||'';
+}
+
+// ══════════════════════════════════════════════════
+//  EXERCICES INTERACTIFS — rendu élève
+// ══════════════════════════════════════════════════
+function renderExoEleve(ex, idx, did, existing) {
+  const t = EXO_TYPES.find(x=>x.val===ex.type)||EXO_TYPES[0];
+  const prevScore = existing?.corrections_exo?.[idx];
+  let body='';
+  if (ex.type==='qcm')     body=renderQCM(ex,idx,did);
+  else if(ex.type==='relier')  body=renderRelier(ex,idx,did);
+  else if(ex.type==='trous')   body=renderTrous(ex,idx,did);
+  else if(ex.type==='croises') body=renderMoisCroises(ex,idx,did);
+  else if(ex.type==='caches')  body=renderMotsCaches(ex,idx,did);
+  else if(ex.type==='image')   body=renderImageComp(ex,idx,did);
+  return `<div class="exo-card">
+    <span class="exo-type-badge ${t.badge}">${t.label}</span>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;margin-bottom:.8rem">${esc(ex.titre||'')}</div>
+    ${ex.consigne?`<p class="text-muted" style="margin-bottom:.8rem">${esc(ex.consigne)}</p>`:''}
+    ${body}
+    ${prevScore!==undefined?`<div class="alert a-ok on" style="margin-top:.8rem">Score précédent : ${prevScore}</div>`:''}
+  </div>`;
+}
+
+// QCM
+function renderQCM(ex,idx,did) {
+  const {question,options,correct} = ex.data||{};
+  return `<div>
+    <p style="font-size:.95rem;margin-bottom:.8rem">${esc(question||'')}</p>
+    ${(options||[]).map((o,i)=>`<div class="qcm-option" id="qcm-${idx}-${i}" onclick="selectQCM(${idx},${i},${correct},'${did}')">
+      <div class="qcm-radio"></div>${esc(o)}
+    </div>`).join('')}
+    <div class="alert a-ok" id="qcm-ok-${idx}" style="margin-top:.5rem"></div>
+  </div>`;
+}
+function selectQCM(idx,chosen,correct,did) {
+  const ok = chosen===correct;
+  document.querySelectorAll(`[id^="qcm-${idx}-"]`).forEach((el,i)=>{
+    el.classList.remove('selected','correct','wrong');
+    if(i===chosen) el.classList.add(ok?'correct':'wrong');
+    if(!ok && i===correct) el.classList.add('correct');
+  });
+  const okEl=document.getElementById(`qcm-ok-${idx}`);
+  okEl.textContent=ok?'✓ Bonne réponse !':'✗ Réponse incorrecte — la bonne réponse est surlignée en vert.';
+  okEl.className=`alert ${ok?'a-ok':'a-err'} on`;
+  sauvegarderScoreExo(idx, ok?1:0, did);
+}
+
+// Relier
+function renderRelier(ex,idx,did) {
+  const {pairs} = ex.data||{pairs:[]};
+  const gauche  = pairs.map(p=>p[0]);
+  const droite  = [...pairs.map(p=>p[1])].sort(()=>Math.random()-.5);
+  return `<div class="relier-wrap" id="relier-${idx}">
+    <div class="relier-col">${gauche.map((g,i)=>`<div class="relier-item" id="rg-${idx}-${i}" onclick="selectRelier('g',${idx},${i},'${JSON.stringify(pairs).replace(/'/g,"\\'")}','${did}')">${esc(g)}</div>`).join('')}</div>
+    <div class="relier-col">${droite.map((d,i)=>`<div class="relier-item" id="rd-${idx}-${i}-${esc(d)}" onclick="selectRelier('d',${idx},${i},'${JSON.stringify(pairs).replace(/'/g,"\\'")}','${did}')" data-val="${esc(d)}">${esc(d)}</div>`).join('')}</div>
+  </div>
+  <div class="alert a-ok" id="relier-ok-${idx}" style="margin-top:.5rem"></div>`;
+}
+let relierSel = {}; // {idx: {type,i,val}}
+function selectRelier(type,idx,i,pairsStr,did) {
+  if (!relierSel[idx]) relierSel[idx]={};
+  const sel=relierSel[idx];
+  if(type==='g') {
+    document.querySelectorAll(`[id^="rg-${idx}-"]`).forEach(el=>el.classList.remove('selected'));
+    document.getElementById(`rg-${idx}-${i}`).classList.add('selected');
+    sel.g=i; sel.gEl=`rg-${idx}-${i}`;
+  } else {
+    document.querySelectorAll(`[id^="rd-${idx}-"]`).forEach(el=>el.classList.remove('selected'));
+    document.getElementById(`rd-${idx}-${i}-${document.getElementById(`rd-${idx}-${i}-${document.querySelector(`#rd-${idx}-${i}-${([...document.querySelectorAll(`[id^="rd-${idx}-"]`)][i]?.dataset?.val||'')}`)?.id.split('-').slice(3).join('-')}`)||''}`);
+    // simplified: find clicked element
+    const el = event.target.closest('.relier-item'); el.classList.add('selected'); sel.d=el.dataset.val; sel.dEl=el;
+  }
+  if (sel.g!==undefined && sel.d) {
+    const pairs=JSON.parse(pairsStr);
+    const ok=pairs[sel.g][1]===sel.d;
+    document.getElementById(sel.gEl).classList.remove('selected');
+    document.getElementById(sel.gEl).classList.add(ok?'linked':'error');
+    sel.dEl?.classList.remove('selected');
+    sel.dEl?.classList.add(ok?'linked':'error');
+    const okEl=document.getElementById(`relier-ok-${idx}`);
+    okEl.textContent=ok?'✓ Liaison correcte !':'✗ Liaison incorrecte.';
+    okEl.className=`alert ${ok?'a-ok':'a-err'} on`;
+    relierSel[idx]={};
+    sauvegarderScoreExo(idx, ok?1:0, did);
+  }
+}
+
+// Texte à trous
+function renderTrous(ex,idx,did) {
+  const {texte_trous, mots} = ex.data||{};
+  let html=esc(texte_trous||'');
+  (mots||[]).forEach((m,i)=>{ html=html.replace(`___${i+1}___`,`<input class="trou" id="trou-${idx}-${i}" data-mot="${esc(m)}" placeholder="…">`); });
+  return `<div style="line-height:2;font-family:'Cormorant Garamond',serif;font-size:1.05rem">${html}</div>
+  <button class="btn btn-ghost btn-sm" style="margin-top:.8rem" onclick="verifierTrous(${idx},'${did}')">Vérifier</button>
+  <div class="alert a-ok" id="trous-ok-${idx}" style="margin-top:.5rem"></div>`;
+}
+function verifierTrous(idx,did) {
+  let ok=0,tot=0;
+  document.querySelectorAll(`[id^="trou-${idx}-"]`).forEach(inp=>{
+    tot++;
+    const correct=inp.dataset.mot?.toLowerCase()===inp.value.trim().toLowerCase();
+    inp.classList.remove('correct','wrong');
+    inp.classList.add(correct?'correct':'wrong');
+    if(correct)ok++;
+  });
+  const okEl=document.getElementById(`trous-ok-${idx}`);
+  okEl.textContent=`${ok}/${tot} bonne${ok>1?'s':''} réponse${ok>1?'s':''}.`;
+  okEl.className=`alert ${ok===tot?'a-ok':'a-err'} on`;
+  sauvegarderScoreExo(idx, ok+'/'+tot, did);
+}
+
+// Mots croisés (grille simple)
+function renderMoisCroises(ex,idx,did) {
+  const {grille, clues_h, clues_v} = ex.data||{grille:[],clues_h:[],clues_v:[]};
+  if (!grille.length) return '<p class="text-muted">Grille non configurée.</p>';
+  const rows=grille.length, cols=grille[0].length;
+  let html=`<div class="crossword" style="grid-template-columns:repeat(${cols},34px)">`;
+  grille.forEach((row,r)=>row.forEach((cell,c)=>{
+    if(cell===null) html+=`<div class="cw-cell black"></div>`;
+    else {
+      const num=cell.num?`<span class="cw-num">${cell.num}</span>`:'';
+      html+=`<div class="cw-cell"><input class="cw-input" maxlength="1" id="cw-${idx}-${r}-${c}" data-ans="${esc(cell.letter||'')}">${num}</div>`;
+    }
+  }));
+  html+=`</div>`;
+  if (clues_h.length||clues_v.length) {
+    html+=`<div class="cw-clues">
+      <div><h4>Horizontalement</h4>${clues_h.map(c=>`<div class="cw-clue"><strong>${c.num}.</strong> ${esc(c.clue)}</div>`).join('')}</div>
+      <div><h4>Verticalement</h4>${clues_v.map(c=>`<div class="cw-clue"><strong>${c.num}.</strong> ${esc(c.clue)}</div>`).join('')}</div>
+    </div>`;
+  }
+  html+=`<button class="btn btn-ghost btn-sm" style="margin-top:.8rem" onclick="verifierCroises(${idx},'${did}')">Vérifier</button>`;
+  html+=`<div class="alert a-ok" id="cw-ok-${idx}" style="margin-top:.5rem"></div>`;
+  return html;
+}
+function verifierCroises(idx,did) {
+  let ok=0,tot=0;
+  document.querySelectorAll(`[id^="cw-${idx}-"]`).forEach(inp=>{
+    if(inp.dataset.ans) {
+      tot++;
+      if(inp.value.toUpperCase()===inp.dataset.ans.toUpperCase()){ok++;inp.style.color=var_vert;}
+      else inp.style.color=var_rouge;
+    }
+  });
+  const okEl=document.getElementById(`cw-ok-${idx}`);
+  okEl.textContent=`${ok}/${tot} lettre${ok>1?'s':''} correcte${ok>1?'s':''}.`;
+  okEl.className=`alert ${ok===tot?'a-ok':'a-err'} on`;
+  sauvegarderScoreExo(idx,ok+'/'+tot,did);
+}
+const var_vert='#4a7c5a', var_rouge='#8a3a2a';
+
+// Mots cachés
+function renderMotsCaches(ex,idx,did) {
+  const {grille_lettres, mots_a_trouver} = ex.data||{grille_lettres:[],mots_a_trouver:[]};
+  if (!grille_lettres.length) return '<p class="text-muted">Grille non configurée.</p>';
+  const cols=grille_lettres[0].length;
+  let html=`<div class="wordsearch" style="grid-template-columns:repeat(${cols},28px)" id="ws-${idx}">`;
+  grille_lettres.forEach((row,r)=>row.forEach((l,c)=>
+    html+=`<div class="ws-cell" id="ws-${idx}-${r}-${c}" data-r="${r}" data-c="${c}" data-l="${l}" 
+      onmousedown="wsStart(${idx},${r},${c})" onmouseenter="wsMove(${idx},${r},${c})" onmouseup="wsEnd(${idx},'${(mots_a_trouver||[]).join(',')}','${did}')">${l}</div>`
+  ));
+  html+=`</div>`;
+  html+=`<div class="ws-wordlist">${(mots_a_trouver||[]).map(m=>`<span class="ws-word" id="wsw-${idx}-${m}">${m}</span>`).join('')}</div>`;
+  return html;
+}
+let wsSelection={};
+function wsStart(idx,r,c){wsSelection[idx]={start:[r,c],cells:[[r,c]]};document.getElementById(`ws-${idx}-${r}-${c}`).classList.add('selecting');}
+function wsMove(idx,r,c){
+  if(!wsSelection[idx]||event.buttons!==1)return;
+  const [sr,sc]=wsSelection[idx].start;
+  wsSelection[idx].cells=[];
+  // find direction
+  const dr=r-sr,dc=c-sc,steps=Math.max(Math.abs(dr),Math.abs(dc));
+  if(!steps)return;
+  const nr=dr?dr/Math.abs(dr):0,nc=dc?dc/Math.abs(dc):0;
+  document.querySelectorAll(`[id^="ws-${idx}-"]:not(.found)`).forEach(el=>el.classList.remove('selecting'));
+  for(let s=0;s<=steps;s++){
+    const cr2=sr+s*nr,cc2=sc+s*nc;
+    wsSelection[idx].cells.push([cr2,cc2]);
+    document.getElementById(`ws-${idx}-${cr2}-${cc2}`)?.classList.add('selecting');
+  }
+}
+function wsEnd(idx,motsStr,did){
+  if(!wsSelection[idx])return;
+  const cells=wsSelection[idx].cells;
+  const word=cells.map(([r,c])=>document.getElementById(`ws-${idx}-${r}-${c}`)?.dataset.l||'').join('');
+  const mots=motsStr.split(',');
+  const found=mots.find(m=>m===word||m===word.split('').reverse().join(''));
+  document.querySelectorAll(`[id^="ws-${idx}-"]:not(.found)`).forEach(el=>el.classList.remove('selecting'));
+  if(found){
+    cells.forEach(([r,c])=>document.getElementById(`ws-${idx}-${r}-${c}`)?.classList.add('found'));
+    document.getElementById(`wsw-${idx}-${found}`)?.classList.add('found');
+    sauvegarderScoreExo(idx,'mot:'+found,did);
+  }
+  wsSelection[idx]=null;
+}
+
+// Comparaison images
+function renderImageComp(ex,idx,did) {
+  const {img_original,img_erreur,nb_diff,descriptions} = ex.data||{};
+  if (!img_original||!img_erreur) return '<p class="text-muted">Images non configurées.</p>';
+  return `<div class="img-compare-wrap" id="imgcmp-${idx}">
+    <div class="img-panel">
+      <div class="img-panel-label">Original</div>
+      <img src="${esc(img_original)}" alt="Original">
+    </div>
+    <div class="img-panel" style="position:relative">
+      <div class="img-panel-label">Copie (avec erreurs)</div>
+      <img src="${esc(img_erreur)}" alt="Copie" style="cursor:crosshair" onclick="marquerDiff(event,${idx},${nb_diff||5},'${did}')">
+      <div id="markers-${idx}"></div>
+    </div>
+  </div>
+  <div class="diff-list" id="diffs-${idx}">
+    ${(descriptions||[]).map((d,i)=>`<div class="diff-item" id="diff-${idx}-${i}" style="display:none">
+      <div class="diff-num">${i+1}</div><span>${esc(d)}</span>
+    </div>`).join('')}
+  </div>`;
+}
+let diffCount={};
+function marquerDiff(ev,idx,nbMax,did){
+  if(!diffCount[idx])diffCount[idx]=0;
+  if(diffCount[idx]>=nbMax)return;
+  const n=++diffCount[idx];
+  const rect=ev.currentTarget.getBoundingClientRect();
+  const pct_x=((ev.clientX-rect.left)/rect.width*100).toFixed(1);
+  const pct_y=((ev.clientY-rect.top)/rect.height*100).toFixed(1);
+  const m=document.createElement('div');
+  m.className='img-marker';
+  m.textContent=n;
+  m.style.left=pct_x+'%'; m.style.top=pct_y+'%';
+  document.getElementById(`markers-${idx}`)?.appendChild(m);
+  const di=document.getElementById(`diff-${idx}-${n-1}`);
+  if(di){di.style.display='flex';di.classList.add('diff-found');}
+  sauvegarderScoreExo(idx,n+'/'+nbMax,did);
+}
+
+// Sauvegarder score exercice
+async function sauvegarderScoreExo(exoIdx,score,did){
+  const existing=mesReponses.find(r=>r.devoir_id===did);
+  const newCorrsExo={...(existing?.corrections_exo||{}),[exoIdx]:score};
+  if(existing){
+    await SB.from('reponses').update({corrections_exo:newCorrsExo}).eq('id',existing.id);
+    existing.corrections_exo=newCorrsExo;
+  } else {
+    const {data:nr}=await SB.from('reponses').insert({
+      devoir_id:did,eleve_id:currentUser.id,corrections_exo:newCorrsExo
+    }).select().single();
+    if(nr) mesReponses.push(nr);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  EXERCICES IA SUPPLÉMENTAIRES
+// ══════════════════════════════════════════════════
+async function renderExercicesIA(did) {
+  const d = devoirs.find(x=>x.id===did);
+  const zone=document.getElementById('extra-zone');
+  if(!zone||!d||!d.questions?.length)return;
+  zone.innerHTML=`<div class="extra-section">
+    <h3>✦ Exercices supplémentaires</h3>
+    <p>Félicitations — devoir terminé ! Voici des exercices générés pour approfondir.</p>
+    <div id="extra-load" style="text-align:center;padding:1rem;color:var(--or)">
+      <span class="loader"><span></span><span></span><span></span></span>
+    </div>
+    <div id="extra-qs"></div>
+    <div id="extra-btn" style="display:none;margin-top:1rem">
+      <button class="btn btn-or" onclick="corrigerExtra('${did}')">Obtenir un retour</button>
+    </div>
+  </div>`;
+
+  const prompt=`Professeur de français Première. Texte étudié : "${d.texte.slice(0,500)}" (${d.source||''}).
+Génère 3 exercices supplémentaires variés : style, ouverture culturelle, langue.
+JSON UNIQUEMENT (pas de markdown) :
+{"exercices":[{"titre":"...","consigne":"...","type":"style|ouverture|langue"},{"titre":"...","consigne":"...","type":"..."},{"titre":"...","consigne":"...","type":"..."}]}`;
+
+  try {
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await r.json();
+    let raw=(data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
+    const exs=JSON.parse(raw).exercices||[];
+    document.getElementById('extra-load').style.display='none';
+    const icons={style:'✒️',ouverture:'🌐',langue:'🔬'};
+    document.getElementById('extra-qs').innerHTML=exs.map((ex,i)=>`
+      <div class="extra-q">
+        <div style="font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--sepia);margin-bottom:.4rem">${icons[ex.type]||'✦'} ${esc(ex.titre)}</div>
+        <div class="q-label">${esc(ex.consigne)}</div>
+        <textarea class="q-area" id="extra-${i}" rows="3" placeholder="Votre réponse…" style="margin-top:.5rem;font-size:.88rem"></textarea>
+        <div class="corr-box corr-ia" id="extra-corr-${i}">
+          <div class="corr-label">✦ Retour IA</div>
+          <div class="corr-content" id="extra-corr-txt-${i}"></div>
+        </div>
+      </div>`).join('');
+    document.getElementById('extra-btn').style.display='block';
+    zone.dataset.exs=JSON.stringify(exs);
+  } catch(e) {
+    document.getElementById('extra-load').innerHTML='<p style="color:#a08060;font-size:.82rem">Impossible de générer les exercices.</p>';
+  }
+}
+
+async function corrigerExtra(did){
+  const d=devoirs.find(x=>x.id===did);
+  const zone=document.getElementById('extra-zone');
+  const exs=JSON.parse(zone.dataset.exs||'[]');
+  for(let i=0;i<exs.length;i++){
+    const rep=document.getElementById(`extra-${i}`)?.value.trim();
+    if(!rep)continue;
+    const cb=document.getElementById(`extra-corr-${i}`);
+    const ct=document.getElementById(`extra-corr-txt-${i}`);
+    cb.classList.add('on');
+    ct.innerHTML=`<span class="loader"><span></span><span></span><span></span></span>`;
+    const prompt=`Professeur français Première. Exercice sur : "${d.texte.slice(0,200)}…"
+Exercice : ${exs[i].consigne}
+Réponse élève : ${rep}
+Retour guidé (3-5 lignes, HTML <p><ul><li>), sans donner la réponse.`;
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:[{role:'user',content:prompt}]})
+      });
+      const data=await r.json();
+      ct.innerHTML=data.content?.[0]?.text||'<p>Erreur.</p>';
+    }catch(e){ct.innerHTML='<p>Erreur.</p>';}
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  MÉDIAS
+// ══════════════════════════════════════════════════
+function ouvrirMedia(m) {
+  const zone=document.getElementById('media-embed');
+  if(!zone)return;
+  if(m.type==='youtube'){
+    let vid='';
+    try{const u=new URL(m.url);vid=u.searchParams.get('v')||u.pathname.split('/').pop();}catch(e){vid=m.url;}
+    zone.innerHTML=`<div class="video-embed" style="margin-top:1rem"><iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe></div>`;
+  } else if(m.type==='podcast'){
+    zone.innerHTML=`<div style="margin-top:1rem;padding:1rem;background:var(--parchemin);border:1px solid var(--bord);border-radius:var(--r)">
+      <audio controls style="width:100%"><source src="${esc(m.url)}"></audio>
+      <p class="text-muted" style="margin-top:.4rem;font-size:.78rem">📻 ${esc(m.label)}</p></div>`;
+  } else if(m.type==='pdf'){
+    ouvrirPDF(m.url,m.label);
+  }
+}
+
+// PDF
+function ouvrirPDF(url,label){
+  document.getElementById('pdf-viewer').style.display='flex';
+  document.getElementById('pdf-title').textContent=label;
+  document.getElementById('pdf-wm').textContent=`${currentProfile.prenom} ${currentProfile.nom}`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.getDocument(url).promise.then(doc=>{pdfDoc=doc;pdfPage=1;pdfTotal=doc.numPages;renderPDFPage();})
+  .catch(()=>{document.getElementById('pdf-canvas').parentElement.innerHTML='<p style="color:white;text-align:center;padding:2rem">Impossible de charger le PDF (vérifiez l\'URL et les autorisations CORS).</p>';});
+}
+function renderPDFPage(){
+  if(!pdfDoc)return;
+  document.getElementById('pdf-info').textContent=`${pdfPage}/${pdfTotal}`;
+  pdfDoc.getPage(pdfPage).then(pg=>{
+    const vp=pg.getViewport({scale:1.5});
+    const cv=document.getElementById('pdf-canvas');
+    cv.width=vp.width;cv.height=vp.height;
+    pg.render({canvasContext:cv.getContext('2d'),viewport:vp});
+  });
+}
+function pdfPrev(){if(pdfPage>1){pdfPage--;renderPDFPage();}}
+function pdfNext(){if(pdfPage<pdfTotal){pdfPage++;renderPDFPage();}}
+function closePDF(){document.getElementById('pdf-viewer').style.display='none';pdfDoc=null;}
+document.addEventListener('contextmenu',e=>{if(e.target.classList.contains('texte-lit'))e.preventDefault();});
+
+// ══════════════════════════════════════════════════
+//  ÉLÈVE — Progrès
+// ══════════════════════════════════════════════════
+function renderProgres() {
+  const c=document.getElementById('progres-content');
+  const total=devoirs.length, done=mesReponses.length;
+  const pct=total?Math.round(done/total*100):0;
+  // Taux de réussite moyen sur exercices
+  let totalScores=0,nbScores=0;
+  mesReponses.forEach(r=>{
+    Object.values(r.corrections_exo||{}).forEach(s=>{
+      if(typeof s==='string'&&s.includes('/')){
+        const [a,b]=s.split('/').map(Number);
+        if(b){totalScores+=a/b;nbScores++;}
+      } else if(s===1||s===0){totalScores+=s;nbScores++;}
+    });
+  });
+  const reussite=nbScores?Math.round(totalScores/nbScores*100):null;
+  let html=`<div class="stats-grid" style="margin-bottom:1.5rem">
+    <div class="stat-card"><div class="stat-val">${done}</div><div class="stat-label">Devoirs complétés</div></div>
+    <div class="stat-card"><div class="stat-val">${total}</div><div class="stat-label">Devoirs disponibles</div></div>
+    <div class="stat-card"><div class="stat-val">${pct}%</div><div class="stat-label">Taux de complétion</div></div>
+    <div class="stat-card"><div class="stat-val">${reussite!==null?reussite+'%':'—'}</div><div class="stat-label">Taux de réussite (exercices)</div></div>
+  </div>
+  <div class="prog-wrap" style="margin-bottom:1.5rem;height:10px"><div class="prog-bar prog-or" style="width:${pct}%"></div></div>
+  <h4 style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;margin-bottom:1rem">Par chapitre</h4>`;
+  chapitres.forEach(ch=>{
+    const devsCh=devoirs.filter(d=>d.chap_id===ch.id);
+    if(!devsCh.length)return;
+    const doneCh=devsCh.filter(d=>mesReponses.some(r=>r.devoir_id===d.id)).length;
+    const pctCh=Math.round(doneCh/devsCh.length*100);
+    html+=`<div style="margin-bottom:1.2rem">
+      <div style="display:flex;justify-content:space-between;margin-bottom:.3rem">
+        <span style="font-weight:600;font-size:.9rem">${esc(ch.titre)}</span>
+        <span class="pct-b ${pctCh===100?'pct-h':pctCh>50?'pct-m':'pct-l'}">${pctCh}%</span>
+      </div>
+      <div class="prog-wrap"><div class="prog-bar prog-or" style="width:${pctCh}%"></div></div>
+    </div>`;
+  });
+  c.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Chapitres
+// ══════════════════════════════════════════════════
+async function creerChapitre(){
+  const titre=document.getElementById('chap-titre').value.trim();
+  const desc=document.getElementById('chap-desc').value.trim();
+  const okEl=document.getElementById('chap-ok');
+  if(!titre)return;
+  const {data}=await SB.from('chapitres').insert({titre,description:desc,ordre:chapitres.length}).select().single();
+  if(data){chapitres.push(data);}
+  document.getElementById('chap-titre').value=''; document.getElementById('chap-desc').value='';
+  okEl.textContent=`✓ Chapitre "${titre}" créé.`; okEl.classList.add('on');
+  setTimeout(()=>okEl.classList.remove('on'),3000);
+  renderChapAdmin(); peuplerSelects();
+}
+
+function renderChapAdmin(){
+  const c=document.getElementById('chap-admin-list');
+  if(!chapitres.length){c.innerHTML='<div class="empty"><div class="ei">📚</div><p>Aucun chapitre.</p></div>';return;}
+  c.innerHTML=chapitres.map((ch,idx)=>{
+    const devsCh=devoirs.filter(d=>d.chap_id===ch.id);
+    return `<div class="chap-adm-card">
+      <div class="chap-adm-hdr">
+        <span class="cn">#${idx+1}</span>
+        <span class="ct">${esc(ch.titre)}</span>
+        <span class="text-muted" style="font-size:.78rem">${devsCh.length} devoir(s)</span>
+        <button class="btn btn-danger btn-sm" onclick="supprimerChapitre('${ch.id}')">Supprimer</button>
+      </div>
+      <div class="chap-adm-body">
+        <div class="text-muted" style="margin-bottom:.5rem">${esc(ch.description||'Pas de description')}</div>
+        ${devsCh.map(d=>`<div class="dev-row">
+          <span class="${d.publie?'tag-act':'tag-arc'}">${d.publie?'Actif':'Archivé'}</span>
+          <span class="dr-t">${esc(d.titre)}</span>
+          <span class="dr-w">${esc(d.semaine||'')}</span>
+          <button class="btn btn-ghost btn-sm" onclick="togglePublie('${d.id}',${!d.publie})">${d.publie?'Archiver':'Publier'}</button>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function supprimerChapitre(id){
+  if(!confirm('Supprimer ce chapitre et tous ses devoirs ?'))return;
+  await SB.from('chapitres').delete().eq('id',id);
+  chapitres=chapitres.filter(c=>c.id!==id);
+  devoirs=devoirs.filter(d=>d.chap_id!==id);
+  renderChapAdmin(); peuplerSelects();
+}
+
+async function togglePublie(did,val){
+  await SB.from('devoirs').update({publie:val}).eq('id',did);
+  const d=devoirs.find(x=>x.id===did); if(d) d.publie=val;
+  renderChapAdmin();
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Formulaire devoir (création & modification)
+// ══════════════════════════════════════════════════
+function peuplerSelects(){
+  const opts='<option value="">— Choisir un chapitre —</option>'+
+    chapitres.map(c=>`<option value="${c.id}">${esc(c.titre)}</option>`).join('');
+  const dc=document.getElementById('d-chapitre');
+  if(dc) dc.innerHTML=opts;
+}
+
+function renderDevoirForm(mode, devoirData={}) {
+  const target = mode==='new' ? 'devoir-form-content' : 'modifier-form-content';
+  const d = devoirData;
+  // Init editors
+  qEditor = (d.questions||[]).length ? [...d.questions] : [{texte:'',type:'reformulation'},{texte:'',type:'analyse'}];
+  mEditor = [...(d.medias||[])];
+  exoEditor = [...(d.exercices||[])];
+
+  const chapOpts = chapitres.map(c=>
+    `<option value="${c.id}" ${d.chap_id===c.id?'selected':''}>${esc(c.titre)}</option>`).join('');
+
+  document.getElementById(target).innerHTML = `
+    <div class="g2">
+      <div class="field"><label>Titre</label><input type="text" id="${mode}-titre" value="${esc(d.titre||'')}" placeholder="ex. Incipit de Madame Bovary"></div>
+      <div class="field"><label>Semaine / date</label><input type="text" id="${mode}-semaine" value="${esc(d.semaine||'')}" placeholder="Sem. 3 — 20 jan."></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Chapitre</label>
+        <select id="${mode}-chap"><option value="">—</option>${chapOpts}</select>
+      </div>
+      <div class="field"><label>Thème</label><input type="text" id="${mode}-theme" value="${esc(d.theme||'')}" placeholder="ex. Le roman réaliste"></div>
+    </div>
+    <div class="field"><label>Texte littéraire</label>
+      <textarea id="${mode}-texte" rows="6" placeholder="Coller l'extrait…">${esc(d.texte||'')}</textarea>
+    </div>
+    <div class="field"><label>Source</label>
+      <input type="text" id="${mode}-source" value="${esc(d.source||'')}" placeholder="Flaubert, Madame Bovary, 1857"></div>
+    <hr class="sep">
+    <div class="card-title" style="border:none;padding:0;margin-bottom:.8rem;font-size:1rem"><span class="ct-icon">🎬</span>Ressources médias</div>
+    <div id="${mode}-media-list"></div>
+    <div class="g3" style="margin-bottom:.5rem">
+      <input type="text" id="${mode}-m-label" placeholder="Titre ressource" style="padding:.5rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+      <select id="${mode}-m-type" style="padding:.5rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+        <option value="youtube">Vidéo YouTube</option>
+        <option value="podcast">Podcast / radio</option>
+        <option value="pdf">PDF</option>
+      </select>
+      <input type="text" id="${mode}-m-url" placeholder="URL" style="padding:.5rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="ajouterMedia('${mode}')">+ Ajouter ressource</button>
+    <hr class="sep">
+    <div class="card-title" style="border:none;padding:0;margin-bottom:.8rem;font-size:1rem"><span class="ct-icon">✎</span>Questions rédactionnelles</div>
+    <div id="${mode}-q-list"></div>
+    <button class="btn btn-ghost btn-sm" onclick="ajouterQuestion('${mode}')">+ Ajouter question</button>
+    <hr class="sep">
+    <div class="card-title" style="border:none;padding:0;margin-bottom:.8rem;font-size:1rem"><span class="ct-icon">🎯</span>Exercices interactifs</div>
+    <div id="${mode}-exo-list"></div>
+    <div class="g3" style="margin-bottom:.5rem">
+      <input type="text" id="${mode}-exo-titre" placeholder="Titre de l'exercice" style="padding:.5rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+      <select id="${mode}-exo-type" style="padding:.5rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+        ${EXO_TYPES.map(t=>`<option value="${t.val}">${t.label}</option>`).join('')}
+      </select>
+      <button class="btn btn-violet btn-sm" onclick="ouvrirExoEditor('${mode}')">+ Créer exercice</button>
+    </div>
+    <hr class="sep">
+    <div class="btn-row">
+      <button class="btn btn-or" onclick="${mode==='new'?'publierDevoir()':'sauvegarderModification()'}">
+        ${mode==='new'?'Publier le devoir':'Sauvegarder les modifications'}
+      </button>
+      <button class="btn btn-ghost" onclick="resetForm('${mode}')">Effacer</button>
+    </div>
+    <div class="alert a-ok" id="${mode}-ok"></div>
+    <div class="alert a-err" id="${mode}-err"></div>`;
+
+  renderQList(mode); renderMediaList(mode); renderExoList(mode);
+}
+
+// ── Questions ──────────────────────────────────
+function ajouterQuestion(mode){ qEditor.push({texte:'',type:'reformulation'}); renderQList(mode); }
+function supprimerQ(i,mode){ if(qEditor.length>1){qEditor.splice(i,1);renderQList(mode);} }
+function renderQList(mode){
+  document.getElementById(`${mode}-q-list`).innerHTML=qEditor.map((q,i)=>`
+    <div class="q-ed-item"><span class="q-ed-num">Q${i+1}</span>
+      <div class="q-ed-row">
+        <textarea rows="2" placeholder="Énoncé…" oninput="qEditor[${i}].texte=this.value">${esc(q.texte)}</textarea>
+        <button class="rm-btn" onclick="supprimerQ(${i},'${mode}')">✕</button>
+      </div>
+      <select style="margin-top:.4rem;padding:.4rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)" onchange="qEditor[${i}].type=this.value">
+        ${Q_TYPES.map(t=>`<option value="${t.val}" ${q.type===t.val?'selected':''}>${t.label}</option>`).join('')}
+      </select>
+    </div>`).join('');
+}
+
+// ── Médias ─────────────────────────────────────
+function ajouterMedia(mode){
+  const label=document.getElementById(`${mode}-m-label`).value.trim();
+  const type=document.getElementById(`${mode}-m-type`).value;
+  const url=document.getElementById(`${mode}-m-url`).value.trim();
+  if(!label||!url)return;
+  mEditor.push({label,type,url});
+  document.getElementById(`${mode}-m-label`).value=''; document.getElementById(`${mode}-m-url`).value='';
+  renderMediaList(mode);
+}
+function renderMediaList(mode){
+  document.getElementById(`${mode}-media-list`).innerHTML=mEditor.map((m,i)=>`
+    <div class="media-ed-row">
+      <span>${m.type==='youtube'?'▶':m.type==='podcast'?'🎙':'📄'}</span>
+      <span>${esc(m.label)}</span>
+      <span class="text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${esc(m.url)}</span>
+      <button class="rm-btn" onclick="mEditor.splice(${i},1);renderMediaList('${mode}')">✕</button>
+    </div>`).join('');
+}
+
+// ── Exercices interactifs ──────────────────────
+function renderExoList(mode){
+  document.getElementById(`${mode}-exo-list`).innerHTML=exoEditor.map((ex,i)=>{
+    const t=EXO_TYPES.find(x=>x.val===ex.type)||EXO_TYPES[0];
+    return `<div class="exo-editor-item"><span class="exo-editor-num">${t.label}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.5rem">
+        <span style="font-size:.9rem">${esc(ex.titre||'Sans titre')}</span>
+        <div style="display:flex;gap:.4rem">
+          <button class="btn btn-ghost btn-sm" onclick="editerExo(${i},'${mode}')">✎ Éditer</button>
+          <button class="rm-btn" onclick="exoEditor.splice(${i},1);renderExoList('${mode}')">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Éditeur d'exercice interactif (modale inline)
+let exoEditIdx = null;
+function ouvrirExoEditor(mode, idx=null){
+  exoEditIdx = idx;
+  const type=document.getElementById(`${mode}-exo-type`).value;
+  const titre=document.getElementById(`${mode}-exo-titre`).value.trim();
+  const ex= idx!==null ? exoEditor[idx] : {type, titre, consigne:'', data:{}};
+  const formHtml = buildExoDataForm(ex.type, ex.data||{});
+  const overlay=document.createElement('div');
+  overlay.id='exo-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML=`<div style="background:white;border-radius:6px;padding:2rem;max-width:700px;width:100%;max-height:85vh;overflow-y:auto">
+    <h3 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;margin-bottom:1rem">Éditeur d'exercice — ${EXO_TYPES.find(t=>t.val===ex.type)?.label||ex.type}</h3>
+    <div class="field"><label>Titre</label><input type="text" id="exo-ed-titre" value="${esc(ex.titre||titre)}" placeholder="Titre de l'exercice"></div>
+    <div class="field"><label>Consigne</label><textarea id="exo-ed-consigne" rows="2" placeholder="Consigne pour les élèves…">${esc(ex.consigne||'')}</textarea></div>
+    <hr class="sep">
+    ${formHtml}
+    <div class="btn-row">
+      <button class="btn btn-or" onclick="validerExo('${mode}')">Valider</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('exo-overlay').remove()">Annuler</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function editerExo(i,mode){
+  document.getElementById(`${mode}-exo-type`).value=exoEditor[i].type;
+  ouvrirExoEditor(mode,i);
+}
+
+function buildExoDataForm(type, data){
+  if(type==='qcm') return `
+    <div class="field"><label>Question</label><textarea id="exo-qcm-q" rows="2">${esc(data.question||'')}</textarea></div>
+    <div class="field"><label>Options (une par ligne)</label><textarea id="exo-qcm-opts" rows="4" placeholder="Option A\nOption B\nOption C">${(data.options||[]).join('\n')}</textarea></div>
+    <div class="field"><label>Numéro de la bonne réponse (0 = première)</label><input type="number" id="exo-qcm-correct" value="${data.correct||0}" min="0"></div>`;
+
+  if(type==='relier') return `
+    <div class="field"><label>Paires à relier (une paire par ligne, séparées par |)</label>
+      <textarea id="exo-relier-pairs" rows="6" placeholder="Balzac | Le Père Goriot\nFlaubert | Madame Bovary\nZola | Germinal">${(data.pairs||[]).map(p=>p.join(' | ')).join('\n')}</textarea>
+    </div>`;
+
+  if(type==='trous') return `
+    <div class="field"><label>Texte avec trous (marquez les trous ___1___, ___2___, etc.)</label>
+      <textarea id="exo-trous-texte" rows="5" placeholder="Le ___1___ est un genre littéraire qui naît au ___2___ siècle.">${esc(data.texte_trous||'')}</textarea>
+    </div>
+    <div class="field"><label>Mots à placer (dans l'ordre des trous, un par ligne)</label>
+      <textarea id="exo-trous-mots" rows="4" placeholder="roman\nXVIIIe">${(data.mots||[]).join('\n')}</textarea>
+    </div>`;
+
+  if(type==='croises') return `
+    <div class="field"><label>Instructions pour les mots croisés</label>
+      <p class="text-muted" style="margin-bottom:.5rem">Définissez la grille et les définitions ci-dessous. Format JSON :</p>
+      <textarea id="exo-croises-json" rows="12" style="font-family:monospace;font-size:.78rem">${JSON.stringify(data||{
+        grille:[
+          [{letter:'R',num:1},{letter:'O'},{letter:'M'},{letter:'A'},{letter:'N'}],
+          [{letter:'E',num:2},{letter:null},{letter:null},{letter:null},{letter:null}],
+          [{letter:'N'},{letter:null},{letter:null},{letter:null},{letter:null}]
+        ],
+        clues_h:[{num:1,clue:'Genre littéraire'}],
+        clues_v:[{num:2,clue:'Sentiment amoureux'}]
+      },null,2)}</textarea>
+    </div>`;
+
+  if(type==='caches') return `
+    <div class="field"><label>Lettres de la grille (une ligne par rangée, lettres séparées par espaces)</label>
+      <textarea id="exo-caches-grille" rows="8" placeholder="R O M A N L I T T E\nF L A U B E R T A S">${(data.grille_lettres||[]).map(r=>r.join(' ')).join('\n')}</textarea>
+    </div>
+    <div class="field"><label>Mots à trouver (un par ligne)</label>
+      <textarea id="exo-caches-mots" rows="5" placeholder="ROMAN\nFLAUBERT">${(data.mots_a_trouver||[]).join('\n')}</textarea>
+    </div>`;
+
+  if(type==='image') return `
+    <div class="field"><label>URL de l'image originale</label><input type="text" id="exo-img-orig" value="${esc(data.img_original||'')}" placeholder="https://…/original.jpg"></div>
+    <div class="field"><label>URL de la copie avec erreurs</label><input type="text" id="exo-img-err" value="${esc(data.img_erreur||'')}" placeholder="https://…/copie-erreurs.jpg"></div>
+    <div class="field"><label>Nombre de différences à trouver</label><input type="number" id="exo-img-nb" value="${data.nb_diff||5}" min="1" max="20"></div>
+    <div class="field"><label>Description des différences (une par ligne, dans l'ordre)</label>
+      <textarea id="exo-img-descs" rows="5" placeholder="La couleur du fond est différente\nUne lettre manque dans le titre">${(data.descriptions||[]).join('\n')}</textarea>
+    </div>`;
+  return '<p class="text-muted">Type non reconnu.</p>';
+}
+
+function validerExo(mode){
+  const type = exoEditIdx!==null ? exoEditor[exoEditIdx].type : document.getElementById(`${mode}-exo-type`).value;
+  const titre = document.getElementById('exo-ed-titre').value.trim();
+  const consigne = document.getElementById('exo-ed-consigne').value.trim();
+  let data={};
+
+  if(type==='qcm'){
+    data={
+      question: document.getElementById('exo-qcm-q').value.trim(),
+      options: document.getElementById('exo-qcm-opts').value.split('\n').map(x=>x.trim()).filter(Boolean),
+      correct: parseInt(document.getElementById('exo-qcm-correct').value)||0
+    };
+  } else if(type==='relier'){
+    data={pairs:document.getElementById('exo-relier-pairs').value.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(p=>p.length===2)};
+  } else if(type==='trous'){
+    data={
+      texte_trous: document.getElementById('exo-trous-texte').value,
+      mots: document.getElementById('exo-trous-mots').value.split('\n').map(x=>x.trim()).filter(Boolean)
+    };
+  } else if(type==='croises'){
+    try{data=JSON.parse(document.getElementById('exo-croises-json').value);}catch(e){alert('JSON invalide.');return;}
+  } else if(type==='caches'){
+    data={
+      grille_lettres: document.getElementById('exo-caches-grille').value.split('\n').map(l=>l.trim().split(/\s+/).filter(Boolean)),
+      mots_a_trouver: document.getElementById('exo-caches-mots').value.split('\n').map(x=>x.trim().toUpperCase()).filter(Boolean)
+    };
+  } else if(type==='image'){
+    data={
+      img_original: document.getElementById('exo-img-orig').value.trim(),
+      img_erreur: document.getElementById('exo-img-err').value.trim(),
+      nb_diff: parseInt(document.getElementById('exo-img-nb').value)||5,
+      descriptions: document.getElementById('exo-img-descs').value.split('\n').map(x=>x.trim()).filter(Boolean)
+    };
+  }
+
+  const exo={type,titre,consigne,data};
+  if(exoEditIdx!==null) exoEditor[exoEditIdx]=exo; else exoEditor.push(exo);
+  document.getElementById('exo-overlay').remove();
+  renderExoList(mode);
+}
+
+function resetForm(mode){
+  qEditor=[{texte:'',type:'reformulation'},{texte:'',type:'analyse'}];
+  mEditor=[]; exoEditor=[];
+  renderDevoirForm(mode);
+}
+
+// ── Publier ────────────────────────────────────
+async function publierDevoir(){
+  const titre=document.getElementById('new-titre').value.trim();
+  const chap=document.getElementById('new-chap').value;
+  const texte=document.getElementById('new-texte').value.trim();
+  const okEl=document.getElementById('new-ok'), errEl=document.getElementById('new-err');
+  okEl.classList.remove('on'); errEl.classList.remove('on');
+  if(!titre||!texte||!chap){errEl.textContent='Titre, texte et chapitre sont obligatoires.';errEl.classList.add('on');return;}
+  const qs=qEditor.filter(q=>q.texte.trim());
+  if(!qs.length&&!exoEditor.length){errEl.textContent='Ajoutez au moins une question ou un exercice.';errEl.classList.add('on');return;}
+  const payload={
+    chap_id:chap, titre,
+    semaine:document.getElementById('new-semaine').value,
+    theme:document.getElementById('new-theme').value,
+    texte, source:document.getElementById('new-source').value,
+    questions:qs, medias:mEditor, exercices:exoEditor,
+    correction_prof:{}, publie:true
+  };
+  const {data,error}=await SB.from('devoirs').insert(payload).select().single();
+  if(error){errEl.textContent='Erreur : '+error.message;errEl.classList.add('on');return;}
+  devoirs.unshift(data);
+  okEl.textContent=`✓ Devoir "${titre}" publié.`; okEl.classList.add('on');
+  resetForm('new'); renderChapAdmin();
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Modifier un devoir
+// ══════════════════════════════════════════════════
+function peuplerSelModifier(){
+  const sel=document.getElementById('sel-modifier');
+  sel.innerHTML='<option value="">— Sélectionner —</option>'+
+    devoirs.map(d=>`<option value="${d.id}">${esc(d.titre)} (${esc(d.semaine||'—')})</option>`).join('');
+  document.getElementById('modifier-form-content').innerHTML='';
+}
+
+function chargerDevoirAModifier(){
+  const did=document.getElementById('sel-modifier').value;
+  if(!did){document.getElementById('modifier-form-content').innerHTML='';return;}
+  const d=devoirs.find(x=>x.id===did);
+  if(!d)return;
+  renderDevoirForm('modify',d);
+  // Stocker l'id courant
+  document.getElementById('modifier-form-content').dataset.did=did;
+}
+
+async function sauvegarderModification(){
+  const container=document.getElementById('modifier-form-content');
+  const did=container.dataset.did;
+  const titre=document.getElementById('modify-titre').value.trim();
+  const texte=document.getElementById('modify-texte').value.trim();
+  const okEl=document.getElementById('modify-ok'), errEl=document.getElementById('modify-err');
+  okEl.classList.remove('on'); errEl.classList.remove('on');
+  if(!titre||!texte){errEl.textContent='Titre et texte obligatoires.';errEl.classList.add('on');return;}
+  const payload={
+    chap_id:document.getElementById('modify-chap').value,
+    titre, semaine:document.getElementById('modify-semaine').value,
+    theme:document.getElementById('modify-theme').value,
+    texte, source:document.getElementById('modify-source').value,
+    questions:qEditor.filter(q=>q.texte.trim()),
+    medias:mEditor, exercices:exoEditor,
+    updated_at:new Date().toISOString()
+  };
+  const {error}=await SB.from('devoirs').update(payload).eq('id',did);
+  if(error){errEl.textContent='Erreur : '+error.message;errEl.classList.add('on');return;}
+  const idx=devoirs.findIndex(x=>x.id===did);
+  if(idx>=0) devoirs[idx]={...devoirs[idx],...payload};
+  okEl.textContent='✓ Devoir modifié avec succès.'; okEl.classList.add('on');
+  renderChapAdmin();
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Corrections enseignante
+// ══════════════════════════════════════════════════
+function peuplerSelCorr(){
+  const sel=document.getElementById('sel-corr-devoir');
+  sel.innerHTML='<option value="">— Sélectionner —</option>'+
+    devoirs.map(d=>`<option value="${d.id}">${esc(d.titre)}</option>`).join('');
+  document.getElementById('corr-prof-form').innerHTML='';
+}
+
+function chargerCorrProf(){
+  const did=document.getElementById('sel-corr-devoir').value;
+  if(!did){document.getElementById('corr-prof-form').innerHTML='';return;}
+  const d=devoirs.find(x=>x.id===did);
+  if(!d||!d.questions?.length){
+    document.getElementById('corr-prof-form').innerHTML='<p class="text-muted">Ce devoir n\'a pas de questions rédactionnelles.</p>';
+    return;
+  }
+  const corrProf=d.correction_prof||{};
+  let html=d.questions.map((q,i)=>{
+    const t=Q_TYPES.find(x=>x.val===q.type)||Q_TYPES[0];
+    return `<div class="corr-prof-editor">
+      <label>Q${i+1} — ${t.label}</label>
+      <div style="font-size:.88rem;color:var(--marge);margin-bottom:.5rem;font-style:italic">${esc(q.texte)}</div>
+      <textarea id="cprof-${i}" rows="5" placeholder="Saisissez ici la correction modèle pour cette question…">${esc(corrProf[i]||'')}</textarea>
+    </div>`;
+  }).join('');
+  html+=`<div class="btn-row">
+    <button class="btn btn-or" onclick="sauvegarderCorrProf('${did}')">Enregistrer les corrections</button>
+  </div>
+  <div class="alert a-ok" id="cprof-ok"></div>`;
+  document.getElementById('corr-prof-form').innerHTML=html;
+}
+
+async function sauvegarderCorrProf(did){
+  const d=devoirs.find(x=>x.id===did);
+  const corrProf={};
+  (d.questions||[]).forEach((_,i)=>{
+    const val=document.getElementById(`cprof-${i}`)?.value.trim();
+    if(val) corrProf[i]=val;
+  });
+  const {error}=await SB.from('devoirs').update({correction_prof:corrProf}).eq('id',did);
+  const okEl=document.getElementById('cprof-ok');
+  if(error){okEl.className='alert a-err on';okEl.textContent='Erreur : '+error.message;return;}
+  d.correction_prof=corrProf;
+  okEl.className='alert a-ok on';
+  okEl.textContent='✓ Corrections enregistrées. Les élèves pourront les consulter après soumission.';
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Suivi
+// ══════════════════════════════════════════════════
+async function renderStats(){
+  // Charger toutes les réponses (prof)
+  const {data:allRep}=await SB.from('reponses').select('*');
+  const {data:allProf}=await SB.from('profiles').select('*').eq('role','eleve');
+  const devsPub=devoirs.filter(d=>d.publie);
+  const eleves=allProf||[];
+  const reps=allRep||[];
+
+  // Taux de réussite global
+  let totalScores=0,nbScores=0;
+  reps.forEach(r=>{
+    Object.values(r.corrections_exo||{}).forEach(s=>{
+      if(typeof s==='string'&&s.includes('/')){
+        const [a,b]=s.split('/').map(Number);
+        if(b){totalScores+=a/b;nbScores++;}
+      }else if(s===1||s===0){totalScores+=Number(s);nbScores++;}
+    });
+  });
+  const reussite=nbScores?Math.round(totalScores/nbScores*100):null;
+
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-val">${eleves.length}</div><div class="stat-label">Élèves inscrits</div></div>
+    <div class="stat-card"><div class="stat-val">${devsPub.length}</div><div class="stat-label">Devoirs publiés</div></div>
+    <div class="stat-card"><div class="stat-val">${reps.length}</div><div class="stat-label">Soumissions</div></div>
+    <div class="stat-card"><div class="stat-val">${reussite!==null?reussite+'%':'—'}</div><div class="stat-label">Taux de réussite moyen</div></div>`;
+
+  // Stocker pour renderSuivi
+  document.getElementById('panel-adm-suivi').dataset.allrep=JSON.stringify(reps);
+  document.getElementById('panel-adm-suivi').dataset.allprof=JSON.stringify(eleves);
+  renderSuivi();
+}
+
+function peuplerFilChap(){
+  const sel=document.getElementById('fil-chap');
+  sel.innerHTML='<option value="">Tous les chapitres</option>'+
+    chapitres.map(c=>`<option value="${c.id}">${esc(c.titre)}</option>`).join('');
+}
+
+function renderSuivi(){
+  const panel=document.getElementById('panel-adm-suivi');
+  const allRep=JSON.parse(panel.dataset.allrep||'[]');
+  const allProf=JSON.parse(panel.dataset.allprof||'[]');
+  const filClasse=document.getElementById('fil-classe').value;
+  const filChap=document.getElementById('fil-chap').value;
+  let eleves=allProf;
+  if(filClasse) eleves=eleves.filter(e=>e.classe===filClasse);
+  let devsFil=devoirs.filter(d=>d.publie);
+  if(filChap) devsFil=devsFil.filter(d=>d.chap_id===filChap);
+  const table=document.getElementById('suivi-table');
+  if(!eleves.length||!devsFil.length){
+    table.innerHTML='<tr><td class="text-muted" style="padding:2rem;text-align:center">Aucune donnée.</td></tr>';return;
+  }
+  let head='<thead><tr><th>Élève</th><th>Classe</th><th>Complété</th><th>% Complétion</th><th>% Réussite</th>';
+  devsFil.forEach(d=>head+=`<th title="${esc(d.titre)}">${esc(d.titre.slice(0,15))}…</th>`);
+  head+='</tr></thead>';
+  let body='<tbody>';
+  eleves.sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom)).forEach(el=>{
+    const mesRep=allRep.filter(r=>r.eleve_id===el.id);
+    const done=devsFil.filter(d=>mesRep.some(r=>r.devoir_id===d.id)).length;
+    const pct=Math.round(done/devsFil.length*100);
+    // Réussite
+    let ts=0,nb=0;
+    mesRep.forEach(r=>Object.values(r.corrections_exo||{}).forEach(s=>{
+      if(typeof s==='string'&&s.includes('/')){const[a,b]=s.split('/').map(Number);if(b){ts+=a/b;nb++;}}
+      else if(s===1||s===0){ts+=Number(s);nb++;}
+    }));
+    const reuss=nb?Math.round(ts/nb*100):null;
+    let row=`<tr><td class="bold">${esc(el.prenom)} ${esc(el.nom)}</td><td>${esc(el.classe)}</td>
+      <td>${done}/${devsFil.length}</td>
+      <td><span class="pct-b ${pct===100?'pct-h':pct>=50?'pct-m':'pct-l'}">${pct}%</span></td>
+      <td><span class="pct-b ${reuss===null?'pct-l':reuss>=70?'pct-h':reuss>=40?'pct-m':'pct-l'}">${reuss!==null?reuss+'%':'—'}</span></td>`;
+    devsFil.forEach(d=>{const r=mesRep.find(r=>r.devoir_id===d.id);row+=`<td style="text-align:center">${r?'✓':'—'}</td>`;});
+    row+='</tr>'; body+=row;
+  });
+  body+='</tbody>';
+  table.innerHTML=head+body;
+}
+
+function exportCSV(){
+  const panel=document.getElementById('panel-adm-suivi');
+  const allRep=JSON.parse(panel.dataset.allrep||'[]');
+  const allProf=JSON.parse(panel.dataset.allprof||'[]');
+  const devsPub=devoirs.filter(d=>d.publie);
+  let csv='Prénom,Nom,Classe,'+devsPub.map(d=>`"${d.titre}"`).join(',')+',Complétion %,Réussite %\n';
+  allProf.forEach(el=>{
+    const mesRep=allRep.filter(r=>r.eleve_id===el.id);
+    const done=devsPub.filter(d=>mesRep.some(r=>r.devoir_id===d.id)).length;
+    const pct=devsPub.length?Math.round(done/devsPub.length*100):0;
+    let ts=0,nb=0;
+    mesRep.forEach(r=>Object.values(r.corrections_exo||{}).forEach(s=>{
+      if(typeof s==='string'&&s.includes('/')){const[a,b]=s.split('/').map(Number);if(b){ts+=a/b;nb++;}}
+      else if(s===1||s===0){ts+=Number(s);nb++;}
+    }));
+    const reuss=nb?Math.round(ts/nb*100):0;
+    csv+=`${el.prenom},${el.nom},${el.classe},`+
+      devsPub.map(d=>mesRep.some(r=>r.devoir_id===d.id)?'Fait':'').join(',')+
+      `,${pct}%,${reuss}%\n`;
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='suivi-eleves.csv';a.click();URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN — Réponses détaillées
+// ══════════════════════════════════════════════════
+function peuplerFilDev(){
+  const sel=document.getElementById('fil-dev-rep');
+  sel.innerHTML='<option value="">— Choisir —</option>'+
+    devoirs.map(d=>`<option value="${d.id}">${esc(d.titre)}</option>`).join('');
+}
+
+async function renderReponses(){
+  const did=document.getElementById('fil-dev-rep').value;
+  const c=document.getElementById('reponses-detail');
+  if(!did){c.innerHTML='<div class="empty"><p>Choisissez un devoir.</p></div>';return;}
+  const d=devoirs.find(x=>x.id===did);
+  const {data:reps}=await SB.from('reponses').select('*, profiles(prenom,nom,classe)').eq('devoir_id',did);
+  if(!reps?.length){c.innerHTML='<div class="empty"><p>Aucune réponse pour ce devoir.</p></div>';return;}
+  c.innerHTML=reps.sort((a,b)=>((a.profiles?.nom||'')+(a.profiles?.prenom||'')).localeCompare((b.profiles?.nom||'')+(b.profiles?.prenom||'')))
+  .map(r=>{
+    const el=r.profiles||{};
+    const date=new Date(r.submitted_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<details style="border:1px solid var(--bord);border-radius:var(--r);margin-bottom:.7rem;overflow:hidden">
+      <summary style="padding:.8rem 1.2rem;background:var(--parchemin);cursor:pointer;display:flex;align-items:center;gap:.8rem;font-size:.9rem">
+        <strong>${esc(el.prenom)} ${esc(el.nom)}</strong>
+        <span class="text-muted">${esc(el.classe||'')}</span>
+        <span class="text-muted" style="margin-left:auto;font-size:.78rem">${date}</span>
+      </summary>
+      <div style="padding:1rem 1.2rem">
+        ${(d.questions||[]).map((q,i)=>`
+          <div style="margin-bottom:1.2rem;padding-bottom:1.2rem;border-bottom:1px solid var(--creme)">
+            <div style="font-size:.78rem;font-weight:700;color:var(--marge);margin-bottom:.3rem">Q${i+1}</div>
+            <div style="font-size:.88rem;margin-bottom:.4rem;font-style:italic">${esc(q.texte)}</div>
+            <div style="background:var(--parchemin);padding:.6rem .8rem;border-radius:var(--r);font-size:.88rem;margin-bottom:.4rem">${esc(r.answers?.[i]||'—')}</div>
+            ${r.corrections_ia?.[i]?`<div style="background:#f4faf4;border:1px solid #7aaa7a;border-radius:var(--r);padding:.6rem .8rem;font-size:.82rem;color:#1a3a1a">${r.corrections_ia[i]}</div>`:''}
+            ${r.etoiles?.[i]?`<div style="margin-top:.4rem;font-size:.8rem">Auto-évaluation : ${'★'.repeat(r.etoiles[i])}${'☆'.repeat(5-r.etoiles[i])} — ${starLabel(r.etoiles[i])}</div>`:''}
+          </div>`).join('')}
+        ${Object.keys(r.corrections_exo||{}).length?`<div style="font-size:.82rem;color:var(--marge);margin-top:.5rem">Scores exercices : ${Object.entries(r.corrections_exo).map(([k,v])=>`Ex.${parseInt(k)+1}: ${v}`).join(' · ')}</div>`:''}
+      </div>
+    </details>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+(function init(){
+  if(!initSupabase()){
+    // Vérifier si Supabase est configuré
+    const url=localStorage.getItem('sb_url');
+    if(!url) {
+      // Afficher l'écran de connexion normalement, le lien setup est en bas
+    }
+  }
+  // Vérifier session existante
+  if(SB){
+    SB.auth.getSession().then(({data:{session}})=>{
+      if(session) loadProfile(session.user);
+    });
+  }
+})();
+</script>
+</body>
+</html>
