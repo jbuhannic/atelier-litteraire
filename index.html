@@ -146,6 +146,7 @@ hr.sep{border:none;border-top:1px solid var(--creme);margin:1.2rem 0}
 .tag-ref{background:#e8f0f8;color:var(--bleu)}
 .tag-mob{background:#f0e8f8;color:var(--violet)}
 .tag-ana{background:#f4ece8;color:var(--rouge)}
+.tag-persp{background:#e8f4ee;color:#2a6a4a}
 .q-block{margin-bottom:1.8rem;padding-bottom:1.8rem;border-bottom:1px solid var(--creme)}
 .q-block:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
 .q-label{font-family:'Cormorant Garamond',serif;font-size:1.05rem;color:var(--encre);margin-bottom:.6rem;line-height:1.5}
@@ -364,6 +365,10 @@ hr.sep{border:none;border-top:1px solid var(--creme);margin:1.2rem 0}
         <input type="text" id="setup-url" placeholder="https://xxxxxxxxxxxx.supabase.co"></div>
       <div class="field"><label>Clé publique (anon key)</label>
         <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></div>
+      <div class="field"><label>Clé API Anthropic (pour les corrections IA)</label>
+        <input type="text" id="setup-anthropic" placeholder="sk-ant-...">
+        <div style="font-size:.72rem;color:#6a5a40;margin-top:.3rem">Obtenez-la sur <a href="https://console.anthropic.com" target="_blank" style="color:var(--or)">console.anthropic.com</a> → API Keys</div>
+      </div>
       <button class="btn btn-or" onclick="saveConfig()">Sauvegarder et continuer</button>
     </div>
     <div class="setup-step">
@@ -673,6 +678,7 @@ create trigger on_auth_user_created
           <div id="reponses-detail"></div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -697,19 +703,47 @@ create trigger on_auth_user_created
 //  CONFIG & SUPABASE
 // ══════════════════════════════════════════════════
 let SB = null;
-localStorage.setItem('sb_url', 'https://mrltggoggjnismrcdepk.supabase.co');
-localStorage.setItem('sb_key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ybHRnZ29nZ2puaXNtcmNkZXBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2OTEzNjYsImV4cCI6MjA5NzI2NzM2Nn0.3vieWc6AV8iqSb8peQiyEgOqkTCbtsuHuEcEkek7Xws');
 let currentUser = null;
 let currentProfile = null;
 let chapitres = [], devoirs = [], mesReponses = [];
 let qEditor = [], mEditor = [], exoEditor = [];
 let pdfDoc = null, pdfPage = 1, pdfTotal = 1;
 
+// Clé API Anthropic (pour les corrections IA et exercices supplémentaires)
+// Remplacez la valeur ci-dessous par votre clé API Anthropic
+// Obtenez-la sur https://console.anthropic.com → API Keys
+const ANTHROPIC_API_KEY = localStorage.getItem('anthropic_key') || '';
+function getAnthropicKey(){ return localStorage.getItem('anthropic_key')||ANTHROPIC_API_KEY; }
+
+async function callAnthropicAPI(prompt, maxTokens=1000) {
+  const key = getAnthropicKey();
+  if(!key) {
+    // Proposer de saisir la clé
+    const k = prompt('Clé API Anthropic manquante.\nObtenez-la sur https://console.anthropic.com\nCollez-la ici :');
+    if(k){ localStorage.setItem('anthropic_key', k.trim()); }
+    else return null;
+  }
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': getAnthropicKey(),
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({model:'claude-sonnet-4-6', max_tokens:maxTokens, messages:[{role:'user',content:prompt}]})
+  });
+  const data = await r.json();
+  if(data.error){ console.error('Anthropic API error:', data.error); return null; }
+  return data.content?.[0]?.text || null;
+}
+
 // Types de questions
 const Q_TYPES = [
   { val:'reformulation', label:'Reformulation', cls:'tag-ref' },
   { val:'mobilisation',  label:'Réactivation & mobilisation des connaissances', cls:'tag-mob' },
-  { val:'analyse',       label:'Analyse littéraire', cls:'tag-ana' }
+  { val:'analyse',       label:'Analyse littéraire', cls:'tag-ana' },
+  { val:'perspective',   label:'Mise en perspective & réflexion', cls:'tag-persp' }
 ];
 
 // Types d'exercices interactifs
@@ -725,6 +759,42 @@ const EXO_TYPES = [
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// Parse QCM batch text → {questions:[{question,options,corrects}]}
+function parseQCMBatch(text){
+  const blocks=text.trim().split(/\n\s*\n/).filter(b=>b.trim());
+  const questions=blocks.map(block=>{
+    const lines=block.trim().split('\n').map(l=>l.trim()).filter(Boolean);
+    if(!lines.length) return null;
+    const question=lines[0];
+    const options=[], corrects=[];
+    lines.slice(1).forEach((l,i)=>{
+      const m=l.match(/^([A-Za-z])(✓|✔|√)?\)\s*(.*)$/);
+      if(m){
+        const hasCheck=!!m[2];
+        options.push(m[3]);
+        if(hasCheck) corrects.push(options.length-1);
+      }
+    });
+    if(!options.length) return null;
+    return {question, options, corrects: corrects.length?corrects:[0]};
+  }).filter(Boolean);
+  return {questions};
+}
+
+// Build batch text from existing data (for editing)
+function buildQCMBatchText(data){
+  const letters=['A','B','C','D','E','F','G','H'];
+  if(!data?.questions?.length) return '';
+  return data.questions.map(q=>{
+    const lines=[q.question||''];
+    (q.options||[]).forEach((o,i)=>{
+      const isCorrect=(q.corrects||[q.correct||0]).includes(i);
+      lines.push(`${letters[i]||i}${isCorrect?'✓'}) ${o}`);
+    });
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
 // ── Config Supabase ──────────────────────────────
 function initSupabase() {
   const url = localStorage.getItem('sb_url');
@@ -737,9 +807,11 @@ function initSupabase() {
 function saveConfig() {
   const url = document.getElementById('setup-url').value.trim();
   const key = document.getElementById('setup-key').value.trim();
-  if (!url || !key) return alert('Renseignez les deux champs.');
+  const ak  = document.getElementById('setup-anthropic').value.trim();
+  if (!url || !key) return alert('Renseignez les deux champs Supabase.');
   localStorage.setItem('sb_url', url);
   localStorage.setItem('sb_key', key);
+  if(ak) localStorage.setItem('anthropic_key', ak);
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('conn-screen').style.display  = 'flex';
   initSupabase();
@@ -957,7 +1029,7 @@ async function ouvrirDevoir(did) {
     return `<div class="q-block">
       <span class="q-type-tag ${t.cls}">${t.label}</span>
       <div class="q-label"><strong>${i+1}.</strong> ${esc(q.texte)}</div>
-      <textarea class="q-area" id="qrep-${i}" rows="4" placeholder="Votre réponse…">${esc(prevRep)}</textarea>
+      <textarea class="q-area" id="qrep-${i}" rows="4" placeholder="Votre réponse…" ${prevCorr?'':''}>${esc(prevRep)}</textarea>
       <div class="corr-box corr-ia ${prevCorr?'on':''}" id="corr-ia-${i}">
         <div class="corr-label">✦ Pistes de l'IA</div>
         <div class="corr-content" id="corr-ia-txt-${i}">${prevCorr}</div>
@@ -966,9 +1038,9 @@ async function ouvrirDevoir(did) {
         <div class="corr-label">📝 Correction de l'enseignante</div>
         <div class="corr-content">${esc(prevCorrP)}</div>
       </div>` : `<div class="corr-box corr-prof" id="corr-prof-${i}"></div>`}
-      <div class="autocorr-wrap ${prevCorr?'':'hidden'}" id="autocorr-${i}" style="${prevCorr?'':'display:none'}">
+      <div class="autocorr-wrap" id="autocorr-${i}" style="${prevCorr?'display:block':'display:none'}">
         <div class="autocorr-title">Mon auto-évaluation</div>
-        <div class="stars-wrap" id="stars-${i}">
+        <div class="stars-wrap" id="stars-${i}" data-val="${prevStar}">
           ${[1,2,3,4,5].map(n=>`<span class="star ${prevStar>=n?'on':''}" onclick="setStars(${i},${n})" title="${n} étoile${n>1?'s':''}">★</span>`).join('')}
         </div>
         <div class="autocorr-label" id="star-label-${i}">${starLabel(prevStar)}</div>
@@ -1001,8 +1073,12 @@ async function ouvrirDevoir(did) {
       ${qHtml}
       <hr class="sep">
       <button class="btn btn-encre" id="btn-sub" onclick="soumettreDevoir('${did}')">Soumettre & obtenir les corrections</button>
-      <div class="alert a-ok" id="sub-ok">✓ Réponses enregistrées.</div>
+      <div class="alert a-ok" id="sub-ok">✓ Réponses enregistrées — consultez les corrections ci-dessus.</div>
       <div class="alert a-err" id="sub-err">Merci de répondre à toutes les questions.</div>
+      <div id="exit-gate" style="display:none;margin-top:1.2rem;padding:1rem;background:#fdf8ee;border:2px solid var(--or);border-radius:var(--r)">
+        <div style="font-size:.88rem;font-weight:600;color:#8a6a10;margin-bottom:.6rem">✦ Avant de quitter, évaluez chaque réponse avec les étoiles ci-dessus, puis cliquez ici :</div>
+        <button class="btn btn-or btn-sm" onclick="enregistrerAutoEvalEtQuitter('${did}')">✓ Enregistrer mon auto-évaluation et quitter</button>
+      </div>
     </div>` : ''}
     ${exosHtml}
     <div id="extra-zone"></div>`;
@@ -1056,13 +1132,9 @@ CORRECTION GUIDÉE (pistes, pas la réponse complète) :
 - Bienveillant, exigeant. Max 10 lignes. HTML simple (<p><ol><li>).`;
 
     try {
-      const r=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
-      });
-      const data=await r.json();
-      const txt=data.content?.[0]?.text||'<p>Correction indisponible.</p>';
-      ct.innerHTML=txt; corrs[i]=txt;
+      const txt = await callAnthropicAPI(prompt, 1000);
+      const result = txt || '<p>Correction indisponible.</p>';
+      ct.innerHTML=result; corrs[i]=result;
       if (ac) ac.style.display='block';
     } catch(e){ ct.innerHTML='<p>Erreur.</p>'; }
   }
@@ -1099,7 +1171,14 @@ CORRECTION GUIDÉE (pistes, pas la réponse complète) :
         cpEl.classList.add('on');
       }
     }
+    // Afficher la zone d'auto-évaluation maintenant que la correction est visible
+    const acEl = document.getElementById(`autocorr-${i}`);
+    if (acEl) acEl.style.display='block';
   });
+
+  // Afficher la porte de sortie (auto-évaluation obligatoire)
+  const gate = document.getElementById('exit-gate');
+  if (gate) gate.style.display='block';
 
   renderExercicesIA(did);
 }
@@ -1118,6 +1197,23 @@ function setStars(qIdx, val) {
 
 function starLabel(n) {
   return ['','Insuffisant — à reprendre entièrement','Fragile — des lacunes importantes','Correct — quelques points à consolider','Bien — réponse solide, quelques améliorations','Très bien — maîtrise complète'][n]||'';
+}
+
+async function enregistrerAutoEvalEtQuitter(did) {
+  const d = devoirs.find(x=>x.id===did);
+  const existing = mesReponses.find(r=>r.devoir_id===did);
+  const etoiles={}, auto={};
+  (d?.questions||[]).forEach((_,i)=>{
+    etoiles[i] = parseInt(document.getElementById(`stars-${i}`)?.dataset.val||'0');
+    auto[i]    = document.getElementById(`auto-${i}`)?.value||'';
+  });
+  if(existing){
+    await SB.from('reponses').update({etoiles, autocorrection:auto}).eq('id',existing.id);
+    existing.etoiles=etoiles; existing.autocorrection=auto;
+  }
+  goto('chapitres');
+  await chargerDonnees();
+  renderChapitresEleve();
 }
 
 // ══════════════════════════════════════════════════
@@ -1142,28 +1238,79 @@ function renderExoEleve(ex, idx, did, existing) {
   </div>`;
 }
 
-// QCM
+// QCM — supporte plusieurs questions et choix multiples
 function renderQCM(ex,idx,did) {
-  const {question,options,correct} = ex.data||{};
-  return `<div>
-    <p style="font-size:.95rem;margin-bottom:.8rem">${esc(question||'')}</p>
-    ${(options||[]).map((o,i)=>`<div class="qcm-option" id="qcm-${idx}-${i}" onclick="selectQCM(${idx},${i},${correct},'${did}')">
-      <div class="qcm-radio"></div>${esc(o)}
-    </div>`).join('')}
-    <div class="alert a-ok" id="qcm-ok-${idx}" style="margin-top:.5rem"></div>
-  </div>`;
+  const questions = ex.data?.questions || [];
+  if(!questions.length) return '<p class="text-muted">QCM non configuré.</p>';
+  return questions.map((q,qi)=>{
+    const letters=['A','B','C','D','E','F','G','H'];
+    const multi = Array.isArray(q.corrects) && q.corrects.length > 1;
+    return `<div style="margin-bottom:1.2rem;padding-bottom:1.2rem;border-bottom:1px solid var(--creme)" id="qcm-block-${idx}-${qi}">
+      <p style="font-size:.95rem;margin-bottom:.4rem;font-weight:600">${qi+1}. ${esc(q.question||'')}</p>
+      ${multi?`<p style="font-style:italic;font-size:.82rem;color:var(--marge);margin-bottom:.6rem">Plusieurs réponses possibles.</p>`:''}
+      ${(q.options||[]).map((o,oi)=>`<div class="qcm-option" id="qcm-${idx}-${qi}-${oi}" onclick="selectQCM(${idx},${qi},${oi},'${did}',${JSON.stringify(q.corrects||[q.correct||0])})">
+        <div class="qcm-radio" style="${multi?'border-radius:3px':''}"></div>
+        <strong>${letters[oi]||oi}</strong>&nbsp; ${esc(o)}
+      </div>`).join('')}
+      <div class="alert a-ok" id="qcm-ok-${idx}-${qi}" style="margin-top:.5rem"></div>
+    </div>`;
+  }).join('');
 }
-function selectQCM(idx,chosen,correct,did) {
-  const ok = chosen===correct;
-  document.querySelectorAll(`[id^="qcm-${idx}-"]`).forEach((el,i)=>{
+
+let qcmSelected = {}; // {idx-qi: Set of chosen}
+function selectQCM(idx,qi,oi,did,corrects) {
+  const key=`${idx}-${qi}`;
+  const multi = corrects.length > 1;
+  if(!qcmSelected[key]) qcmSelected[key]=new Set();
+  if(multi){
+    if(qcmSelected[key].has(oi)) qcmSelected[key].delete(oi);
+    else qcmSelected[key].add(oi);
+  } else {
+    qcmSelected[key]=new Set([oi]);
+  }
+  // Update visuals
+  document.querySelectorAll(`[id^="qcm-${idx}-${qi}-"]`).forEach(el=>{
+    const elOi=parseInt(el.id.split('-').pop());
     el.classList.remove('selected','correct','wrong');
-    if(i===chosen) el.classList.add(ok?'correct':'wrong');
-    if(!ok && i===correct) el.classList.add('correct');
+    if(qcmSelected[key].has(elOi)) el.classList.add('selected');
   });
-  const okEl=document.getElementById(`qcm-ok-${idx}`);
-  okEl.textContent=ok?'✓ Bonne réponse !':'✗ Réponse incorrecte — la bonne réponse est surlignée en vert.';
-  okEl.className=`alert ${ok?'a-ok':'a-err'} on`;
-  sauvegarderScoreExo(idx, ok?1:0, did);
+  if(!multi || document.getElementById(`qcm-ok-${idx}-${qi}`).dataset.checked){
+    verifierQCM(idx,qi,did,corrects);
+  }
+  if(multi){
+    const okEl=document.getElementById(`qcm-ok-${idx}-${qi}`);
+    okEl.textContent=`${qcmSelected[key].size} réponse(s) sélectionnée(s) — cliquez sur Vérifier.`;
+    okEl.className='alert a-info on';
+    okEl.dataset.checked='';
+    // Add verify button if not there
+    if(!document.getElementById(`qcm-verify-${idx}-${qi}`)){
+      const btn=document.createElement('button');
+      btn.className='btn btn-ghost btn-sm'; btn.style.marginTop='.4rem';
+      btn.id=`qcm-verify-${idx}-${qi}`;
+      btn.textContent='Vérifier mes réponses';
+      btn.onclick=()=>verifierQCM(idx,qi,did,corrects,true);
+      okEl.after(btn);
+    }
+  } else {
+    verifierQCM(idx,qi,did,corrects);
+  }
+}
+function verifierQCM(idx,qi,did,corrects,fromBtn=false){
+  const key=`${idx}-${qi}`;
+  const chosen=qcmSelected[key]||new Set();
+  const correctSet=new Set(corrects);
+  const allCorrect=[...correctSet].every(c=>chosen.has(c)) && chosen.size===correctSet.size;
+  document.querySelectorAll(`[id^="qcm-${idx}-${qi}-"]`).forEach(el=>{
+    const oi=parseInt(el.id.split('-').pop());
+    el.classList.remove('selected','correct','wrong');
+    if(correctSet.has(oi)) el.classList.add('correct');
+    else if(chosen.has(oi)) el.classList.add('wrong');
+  });
+  const okEl=document.getElementById(`qcm-ok-${idx}-${qi}`);
+  okEl.textContent=allCorrect?'✓ Bonne réponse !':'✗ Réponse incorrecte — la/les bonne(s) réponse(s) est/sont surlignée(s) en vert.';
+  okEl.className=`alert ${allCorrect?'a-ok':'a-err'} on`;
+  okEl.dataset.checked='1';
+  sauvegarderScoreExo(idx, allCorrect?1:0, did);
 }
 
 // Relier
@@ -1289,14 +1436,18 @@ function wsStart(idx,r,c){wsSelection[idx]={start:[r,c],cells:[[r,c]]};document.
 function wsMove(idx,r,c){
   if(!wsSelection[idx]||event.buttons!==1)return;
   const [sr,sc]=wsSelection[idx].start;
-  wsSelection[idx].cells=[];
-  // find direction
-  const dr=r-sr,dc=c-sc,steps=Math.max(Math.abs(dr),Math.abs(dc));
+  const dr=r-sr, dc=c-sc;
+  const steps=Math.max(Math.abs(dr),Math.abs(dc));
   if(!steps)return;
-  const nr=dr?dr/Math.abs(dr):0,nc=dc?dc/Math.abs(dc):0;
+  // Autoriser horizontal, vertical ET diagonal (|dr|=|dc|)
+  const isDiag=Math.abs(dr)===Math.abs(dc);
+  const isHoriz=dr===0; const isVert=dc===0;
+  if(!isDiag&&!isHoriz&&!isVert)return;
+  const nr=dr?dr/Math.abs(dr):0, nc=dc?dc/Math.abs(dc):0;
   document.querySelectorAll(`[id^="ws-${idx}-"]:not(.found)`).forEach(el=>el.classList.remove('selecting'));
+  wsSelection[idx].cells=[];
   for(let s=0;s<=steps;s++){
-    const cr2=sr+s*nr,cc2=sc+s*nc;
+    const cr2=sr+s*nr, cc2=sc+s*nc;
     wsSelection[idx].cells.push([cr2,cc2]);
     document.getElementById(`ws-${idx}-${cr2}-${cc2}`)?.classList.add('selecting');
   }
@@ -1395,13 +1546,10 @@ JSON UNIQUEMENT (pas de markdown) :
 {"exercices":[{"titre":"...","consigne":"...","type":"style|ouverture|langue"},{"titre":"...","consigne":"...","type":"..."},{"titre":"...","consigne":"...","type":"..."}]}`;
 
   try {
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
-    });
-    const data=await r.json();
-    let raw=(data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
-    const exs=JSON.parse(raw).exercices||[];
+    const raw = await callAnthropicAPI(prompt, 1000);
+    if(!raw) throw new Error('no response');
+    const cleaned = raw.replace(/```json|```/g,'').trim();
+    const exs=JSON.parse(cleaned).exercices||[];
     document.getElementById('extra-load').style.display='none';
     const icons={style:'✒️',ouverture:'🌐',langue:'🔬'};
     document.getElementById('extra-qs').innerHTML=exs.map((ex,i)=>`
@@ -1437,12 +1585,8 @@ Exercice : ${exs[i].consigne}
 Réponse élève : ${rep}
 Retour guidé (3-5 lignes, HTML <p><ul><li>), sans donner la réponse.`;
     try{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:[{role:'user',content:prompt}]})
-      });
-      const data=await r.json();
-      ct.innerHTML=data.content?.[0]?.text||'<p>Erreur.</p>';
+      const txt = await callAnthropicAPI(prompt, 600);
+      ct.innerHTML = txt || '<p>Erreur.</p>';
     }catch(e){ct.innerHTML='<p>Erreur.</p>';}
   }
 }
@@ -1627,16 +1771,22 @@ function renderDevoirForm(mode, devoirData={}) {
     <hr class="sep">
     <div class="card-title" style="border:none;padding:0;margin-bottom:.8rem;font-size:1rem"><span class="ct-icon">🎬</span>Ressources médias</div>
     <div id="${mode}-media-list"></div>
-    <div class="g3" style="margin-bottom:.5rem">
-      <input type="text" id="${mode}-m-label" placeholder="Titre ressource" style="padding:.5rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
-      <select id="${mode}-m-type" style="padding:.5rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
-        <option value="youtube">Vidéo YouTube</option>
-        <option value="podcast">Podcast / radio</option>
-        <option value="pdf">PDF</option>
-      </select>
-      <input type="text" id="${mode}-m-url" placeholder="URL" style="padding:.5rem .7rem;border:1px solid var(--bord);border-radius:var(--r);font-size:.82rem;background:var(--parchemin)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+      <div class="field" style="margin:0"><label>Titre de la ressource</label>
+        <input type="text" id="${mode}-m-label" placeholder="ex. Émission France Culture sur Flaubert">
+      </div>
+      <div class="field" style="margin:0"><label>Type</label>
+        <select id="${mode}-m-type">
+          <option value="youtube">Vidéo YouTube</option>
+          <option value="podcast">Podcast / radio</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="ajouterMedia('${mode}')">+ Ajouter ressource</button>
+    <div class="field"><label>URL complète</label>
+      <input type="text" id="${mode}-m-url" placeholder="https://…">
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="ajouterMedia('${mode}')">+ Ajouter cette ressource</button>
     <hr class="sep">
     <div class="card-title" style="border:none;padding:0;margin-bottom:.8rem;font-size:1rem"><span class="ct-icon">✎</span>Questions rédactionnelles</div>
     <div id="${mode}-q-list"></div>
@@ -1748,9 +1898,16 @@ function editerExo(i,mode){
 
 function buildExoDataForm(type, data){
   if(type==='qcm') return `
-    <div class="field"><label>Question</label><textarea id="exo-qcm-q" rows="2">${esc(data.question||'')}</textarea></div>
-    <div class="field"><label>Options (une par ligne)</label><textarea id="exo-qcm-opts" rows="4" placeholder="Option A\nOption B\nOption C">${(data.options||[]).join('\n')}</textarea></div>
-    <div class="field"><label>Numéro de la bonne réponse (0 = première)</label><input type="number" id="exo-qcm-correct" value="${data.correct||0}" min="0"></div>`;
+    <div style="margin-bottom:.8rem">
+      <label style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--marge);display:block;margin-bottom:.3rem">Questions QCM — saisie en lot</label>
+      <p class="text-muted" style="margin-bottom:.5rem;font-size:.8rem">Format : une question par bloc, séparés par une ligne vide.<br>
+      Préfixez chaque option par A) B) C) D)… La ou les bonnes réponses : ajoutez ✓ après la lettre.<br>
+      Exemple :<br><em>Quel est le héros de ce roman ?<br>A) Julien Sorel<br>B✓) Frédéric Moreau<br>C) Rastignac</em></p>
+      <textarea id="exo-qcm-batch" rows="16" style="font-family:monospace;font-size:.82rem;width:100%;padding:.6rem;border:1px solid var(--bord);border-radius:var(--r);background:var(--parchemin);resize:vertical">${buildQCMBatchText(data)}</textarea>
+    </div>
+    <div style="display:flex;align-items:center;gap:.8rem;padding:.6rem .8rem;background:#f0f4f8;border-radius:var(--r);border:1px solid #b0c4d8;font-size:.82rem;color:#2a4a6a">
+      <span>ℹ</span><span>Plusieurs bonnes réponses possibles : mettez ✓ après la lettre de chaque bonne réponse (ex: <strong>B✓) C✓)</strong>). Un message "Choix multiple" sera affiché automatiquement.</span>
+    </div>`;
 
   if(type==='relier') return `
     <div class="field"><label>Paires à relier (une paire par ligne, séparées par |)</label>
@@ -1804,11 +1961,8 @@ function validerExo(mode){
   let data={};
 
   if(type==='qcm'){
-    data={
-      question: document.getElementById('exo-qcm-q').value.trim(),
-      options: document.getElementById('exo-qcm-opts').value.split('\n').map(x=>x.trim()).filter(Boolean),
-      correct: parseInt(document.getElementById('exo-qcm-correct').value)||0
-    };
+    data = parseQCMBatch(document.getElementById('exo-qcm-batch').value);
+    if(!data.questions?.length){alert('Aucune question QCM détectée. Vérifiez le format.');return;}
   } else if(type==='relier'){
     data={pairs:document.getElementById('exo-relier-pairs').value.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(p=>p.length===2)};
   } else if(type==='trous'){
