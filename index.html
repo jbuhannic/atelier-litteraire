@@ -673,7 +673,6 @@ create trigger on_auth_user_created
           <div id="reponses-detail"></div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
@@ -698,6 +697,8 @@ create trigger on_auth_user_created
 //  CONFIG & SUPABASE
 // ══════════════════════════════════════════════════
 let SB = null;
+localStorage.setItem('sb_url', 'https://VOTRE-ID.supabase.co');
+localStorage.setItem('sb_key', 'VOTRE_ANON_KEY_ICI');
 let currentUser = null;
 let currentProfile = null;
 let chapitres = [], devoirs = [], mesReponses = [];
